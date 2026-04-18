@@ -1,0 +1,19 @@
+.DS_Store
+
+build/
+cmake-build-*/
+
+01_projet_jeu/sauvegardes/*.dat
+# dossiers temporaires
+99_build_temporaire/
+cmake-build-*/
+
+# CLion
+.idea/
+
+# fichiers compilés
+*.o
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
