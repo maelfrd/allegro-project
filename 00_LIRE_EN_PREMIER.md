@@ -1,30 +1,23 @@
-# Organisation du dossier
+# Organisation du projet
 
-Ce dossier a ete reordonne pour separer clairement le jeu, la bibliotheque Allegro, Docker et les anciens fichiers de build.
+Le projet a ete remis dans une structure compatible avec `Debug-Docker`.
 
-## Dossiers utiles
+## Fichiers et dossiers importants
 
-- `01_projet_jeu` : ton vrai projet de jeu.
-- `02_bibliotheque_allegro` : le code source de la bibliotheque Allegro 4.4.2.
-- `03_configuration_docker` : le `Dockerfile`.
-- `99_build_temporaire` : anciens builds, fichiers generes par CLion, objets `.o`, executable et essais a ne pas modifier en priorite.
-
-## Dans `01_projet_jeu`
-
-- `src` : le code C principal.
-- `assets` : les images du jeu.
-- `sauvegardes` : les fichiers de sauvegarde.
-- `archives_code` : anciens fichiers gardes de cote pour ne rien perdre.
+- `CMakeLists.txt` : configuration principale du projet.
+- `Dockerfile` : configuration Docker.
+- `allegro-4.4.2` : bibliotheque Allegro.
+- `cmake-build-debug-docker/src` : code source principal du jeu.
+- `cmake-build-debug-docker/assets` : images du jeu.
+- `cmake-build-debug-docker/savegame.dat` : fichier de sauvegarde cree pendant l'execution.
 
 ## Par ou commencer
 
-1. Lire `CMakeLists.txt` a la racine.
-2. Travailler dans `01_projet_jeu/src`.
-3. Utiliser `01_projet_jeu/assets` pour les images.
-4. Ne toucher a `99_build_temporaire` qu'en cas de besoin precis.
+1. Ouvre `CMakeLists.txt`.
+2. Modifie surtout les fichiers dans `cmake-build-debug-docker/src`.
+3. Garde les images dans `cmake-build-debug-docker/assets`.
+4. Utilise `Debug-Docker` comme avant dans CLion.
 
-## Remarques
+## Remarque importante
 
-- Le projet CMake pointe maintenant vers `01_projet_jeu/src`.
-- Le jeu charge maintenant ses assets depuis `01_projet_jeu/assets`.
-- Le `Dockerfile` a ete deplace dans `03_configuration_docker`.
+Le dossier `cmake-build-debug-docker` contient a la fois le code du projet et les fichiers de build. Ce n'est pas ideal, mais c'est cette organisation qui correspond a ton environnement Docker actuel et qui evite de casser le debug.

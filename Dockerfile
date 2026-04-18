@@ -16,16 +16,16 @@ COPY . /usr/src
 
 # Install Allegro with CMake
 RUN set -ex;              \
-    cd /usr/src/02_bibliotheque_allegro/allegro-4.4.2;  \
+    cd /usr/src/allegro-4.4.2;  \
     mkdir build;  \
     cd build;  \
     cmake ..; make; make install
 
 # Copy allegro's lib into global library
-#RUN cp -r /usr/src/02_bibliotheque_allegro/allegro-4.4.2/build/lib /lib/
+#RUN cp -r /usr/src/allegro-4.4.2/build/lib /lib/
 
 # Export Allegro's library for binding (pass as argument on runtime instead: docker run -e ...)
-#RUN export LD_LIBRARY_PATH="/usr/src/02_bibliotheque_allegro/allegro-4.4.2/build/lib/"
+#RUN export LD_LIBRARY_PATH="/usr/src/allegro-4.4.2/build/lib/"
 
 # Try to build the test file
 #RUN cd /usr/src;  \
