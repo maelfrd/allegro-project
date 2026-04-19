@@ -4,7 +4,6 @@
 #include "sauvegarde.h"
 
 #include <stdio.h>
-#include <sys/time.h>
 
 typedef enum {
     ECRAN_MENU = 0,
@@ -14,13 +13,6 @@ typedef enum {
     ECRAN_PARAMETRES,
     ECRAN_REGLES
 } EcranActif;
-
-static long long temps_actuel_ms(void) {
-    struct timeval tv;
-
-    gettimeofday(&tv, NULL);
-    return (long long) tv.tv_sec * 1000LL + (long long) tv.tv_usec / 1000LL;
-}
 
 static void construire_configuration_jeu(ConfigurationJeu *configuration, const RessourcesJeu *ressources) {
     int i;
@@ -48,12 +40,8 @@ static void construire_configuration_jeu(ConfigurationJeu *configuration, const 
     if (configuration->projectileVitesse < 6) {
         configuration->projectileVitesse = 6;
     }
-    configuration->feuLargeur = ressources->feu->w;
-    configuration->feuHauteur = ressources->feu->h;
     configuration->chapeauLargeur = ressources->chapeau->w;
     configuration->chapeauHauteur = ressources->chapeau->h;
-    configuration->doubleTirLargeur = ressources->tir->w;
-    configuration->doubleTirHauteur = ressources->tir->h;
     configuration->explosionLargeur = ressources->explosion->w;
     configuration->explosionHauteur = ressources->explosion->h;
 
@@ -90,8 +78,6 @@ int main(void) {
     int modeDemonstrationActif;
     int valeurDecompte;
     int tempsDecompteMs;
-    int deltaTempsMs;
-    long long tempsFramePrecedentMs;
     char pseudoJoueur[TAILLE_PSEUDO_MAX];
 
     if (!initialiser_affichage(1280, 720, 32)) {
@@ -103,7 +89,6 @@ int main(void) {
                                 "assets/hary2.bmp",
                                 "assets/mangemort.bmp",
                                 "assets/vifdor3.bmp",
-                                "assets/vol_de_mort.bmp",
                                 "assets/tir.bmp",
                                 "assets/effet feu .bmp",
                                 "assets/chapeau.bmp",
@@ -133,23 +118,9 @@ int main(void) {
     modeDemonstrationActif = 0;
     valeurDecompte = 0;
     tempsDecompteMs = 0;
-    deltaTempsMs = 16;
-    tempsFramePrecedentMs = temps_actuel_ms();
     pseudoJoueur[0] = '\0';
 
     while (!actions.quitter) {
-        long long tempsCourantMs = temps_actuel_ms();
-        long long ecartMs = tempsCourantMs - tempsFramePrecedentMs;
-
-        tempsFramePrecedentMs = tempsCourantMs;
-        if (ecartMs < 1) {
-            deltaTempsMs = 1;
-        } else if (ecartMs > 250) {
-            deltaTempsMs = 250;
-        } else {
-            deltaTempsMs = (int) ecartMs;
-        }
-
         repriseDisponible = fichier_existe("savegame.dat");
 
         switch (ecran) {
@@ -163,7 +134,6 @@ int main(void) {
                     if (charger_etat_jeu(&etat, "savegame.dat")) {
                         valeurDecompte = 3;
                         tempsDecompteMs = 1000;
-                        tempsFramePrecedentMs = temps_actuel_ms();
                         ecran = ECRAN_DECOMPTE;
                     }
                 } else if (actions.ouvrirParametres) {
@@ -180,12 +150,10 @@ int main(void) {
                 if (actions.retourMenu) {
                     ecran = ECRAN_MENU;
                 } else if (actions.valider) {
-                    etat.score = 0;
                     if (reinitialiser_partie(&etat, &configuration, 1)) {
                         definir_pseudo_joueur(&etat, pseudoJoueur);
                         valeurDecompte = 3;
                         tempsDecompteMs = 1000;
-                        tempsFramePrecedentMs = temps_actuel_ms();
                         ecran = ECRAN_DECOMPTE;
                     }
                 }
@@ -194,11 +162,10 @@ int main(void) {
 
             case ECRAN_DECOMPTE:
                 dessiner_decompte_depart(&ressources, &etat, valeurDecompte);
-                tempsDecompteMs -= deltaTempsMs;
+                tempsDecompteMs -= 16;
                 if (tempsDecompteMs <= 0) {
                     valeurDecompte--;
                     if (valeurDecompte <= 0) {
-                        tempsFramePrecedentMs = temps_actuel_ms();
                         ecran = ECRAN_JEU;
                     } else {
                         tempsDecompteMs = 1000;
@@ -214,11 +181,9 @@ int main(void) {
                         actions.parametresSelection = 0;
                     }
                 } else if (actions.lancerDemoNiveau > 0 && modeDemonstrationActif) {
-                    etat.score = 0;
                     if (reinitialiser_partie(&etat, &configuration, actions.lancerDemoNiveau)) {
                         valeurDecompte = 3;
                         tempsDecompteMs = 1000;
-                        tempsFramePrecedentMs = temps_actuel_ms();
                         ecran = ECRAN_DECOMPTE;
                     }
                 } else if (actions.retourMenu) {
@@ -239,17 +204,13 @@ int main(void) {
                 }
                 dessiner_ecran_information(&ressources,
                                            "REGLES",
-                                           "Gauche/Droite pour bouger, Haut pour tirer.",
-                                           "A partir du niveau 3, des eclairs tombent toutes les 30 s.",
-                                           "Vif d'or: double tir 10 s, chapeau ou lance-flammes.");
+                                           "Gauche/Droite pour bouger.",
+                                           "Haut pour tirer sur les bulles.",
+                                           "S pour sauvegarder, L pour charger.");
                 break;
 
             case ECRAN_JEU:
-                traiter_ihm_jeu(&actions,
-                                &commandes,
-                                etat.perdu,
-                                etat.gagne,
-                                etat.typeBonusActif == BONUS_LANCE_FLAMMES);
+                traiter_ihm_jeu(&actions, &commandes, etat.perdu || etat.gagne);
 
                 if (actions.sauvegarder) {
                     sauvegarder_etat_jeu(&etat, "savegame.dat");
@@ -257,28 +218,6 @@ int main(void) {
 
                 if (actions.charger) {
                     charger_etat_jeu(&etat, "savegame.dat");
-                    tempsFramePrecedentMs = temps_actuel_ms();
-                }
-
-                if (actions.recommencerNiveau) {
-                    if (reinitialiser_partie(&etat, &configuration, etat.niveau)) {
-                        valeurDecompte = 3;
-                        tempsDecompteMs = 1000;
-                        tempsFramePrecedentMs = temps_actuel_ms();
-                        ecran = ECRAN_DECOMPTE;
-                    }
-                    break;
-                }
-
-                if (actions.nouvellePartieJeu) {
-                    etat.score = 0;
-                    if (reinitialiser_partie(&etat, &configuration, 1)) {
-                        valeurDecompte = 3;
-                        tempsDecompteMs = 1000;
-                        tempsFramePrecedentMs = temps_actuel_ms();
-                        ecran = ECRAN_DECOMPTE;
-                    }
-                    break;
                 }
 
                 if (actions.retourMenu) {
@@ -287,7 +226,6 @@ int main(void) {
                             if (reinitialiser_partie(&etat, &configuration, etat.niveau + 1)) {
                                 valeurDecompte = 3;
                                 tempsDecompteMs = 1000;
-                                tempsFramePrecedentMs = temps_actuel_ms();
                                 ecran = ECRAN_DECOMPTE;
                             }
                         } else {
@@ -300,10 +238,10 @@ int main(void) {
                 }
 
                 if (!actions.quitter) {
-                    mettre_a_jour_logique_jeu(&etat, &configuration, &commandes, deltaTempsMs);
+                    mettre_a_jour_logique_jeu(&etat, &configuration, &commandes);
                 }
 
-                dessiner_jeu(&ressources, &etat, actions.defaiteSelection);
+                dessiner_jeu(&ressources, &etat);
                 break;
         }
 
