@@ -11,11 +11,17 @@ typedef enum {
     BULLE_TAILLES_TOTAL
 } TailleBulle;
 
+typedef enum {
+    ENTITE_MANGE_MORT = 0,
+    ENTITE_VIF_DOR
+} TypeEntite;
+
 typedef struct {
     float x;
     float y;
     float vx;
     float vy;
+    TypeEntite type;
     TailleBulle taille;
     float gravite;
     float rebondSol;
@@ -36,6 +42,10 @@ typedef struct {
     int projectileLargeur;
     int projectileHauteur;
     int projectileVitesse;
+    int chapeauLargeur;
+    int chapeauHauteur;
+    int explosionLargeur;
+    int explosionHauteur;
     int largeurBulles[BULLE_TAILLES_TOTAL];
     int hauteurBulles[BULLE_TAILLES_TOTAL];
 } ConfigurationJeu;
@@ -63,6 +73,20 @@ typedef struct {
     int projectileW;
     int projectileH;
     int projectileSpeed;
+    int chapeauVisible;
+    int chapeauX;
+    int chapeauY;
+    int chapeauW;
+    int chapeauH;
+    float chapeauVx;
+    float chapeauVy;
+    int explosionActive;
+    int explosionX;
+    int explosionY;
+    int explosionW;
+    int explosionH;
+    int explosionTimer;
+    int modeFeuActif;
     int perdu;
     int gagne;
     char pseudo[TAILLE_PSEUDO_MAX];

@@ -22,9 +22,9 @@ static void construire_configuration_jeu(ConfigurationJeu *configuration, const 
     configuration->groundY = SCREEN_H - SCREEN_H / 6;
     configuration->leftLimit = 0;
     configuration->rightLimit = SCREEN_W;
-    configuration->vitesseJoueur = SCREEN_W / 213;
-    if (configuration->vitesseJoueur < 4) {
-        configuration->vitesseJoueur = 4;
+    configuration->vitesseJoueur = SCREEN_W / 640;
+    if (configuration->vitesseJoueur < 1) {
+        configuration->vitesseJoueur = 1;
     }
     configuration->joueurLargeur = ressources->player->w;
     configuration->joueurHauteur = ressources->player->h;
@@ -36,10 +36,14 @@ static void construire_configuration_jeu(ConfigurationJeu *configuration, const 
     if (configuration->projectileHauteur < 16) {
         configuration->projectileHauteur = 16;
     }
-    configuration->projectileVitesse = SCREEN_H / 60;
-    if (configuration->projectileVitesse < 10) {
-        configuration->projectileVitesse = 10;
+    configuration->projectileVitesse = SCREEN_H / 90;
+    if (configuration->projectileVitesse < 6) {
+        configuration->projectileVitesse = 6;
     }
+    configuration->chapeauLargeur = ressources->chapeau->w;
+    configuration->chapeauHauteur = ressources->chapeau->h;
+    configuration->explosionLargeur = ressources->explosion->w;
+    configuration->explosionHauteur = ressources->explosion->h;
 
     for (i = 0; i < BULLE_TAILLES_TOTAL; i++) {
         configuration->largeurBulles[i] = ressources->sprites[i]->w;
@@ -83,7 +87,12 @@ int main(void) {
     if (!charger_ressources_jeu(&ressources,
                                 "assets/test2.bmp",
                                 "assets/hary2.bmp",
-                                "assets/vifdor3.bmp")) {
+                                "assets/mangemort.bmp",
+                                "assets/vifdor3.bmp",
+                                "assets/tir.bmp",
+                                "assets/effet feu .bmp",
+                                "assets/chapeau.bmp",
+                                "assets/explosion.bmp")) {
         fermer_affichage();
         return 1;
     }

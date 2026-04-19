@@ -8,7 +8,12 @@
 typedef struct {
     BITMAP *fond;
     BITMAP *player;
+    BITMAP *tir;
+    BITMAP *feu;
+    BITMAP *chapeau;
+    BITMAP *explosion;
     BITMAP *sprites[BULLE_TAILLES_TOTAL];
+    BITMAP *spritesVifDor[BULLE_TAILLES_TOTAL];
     BITMAP *buffer;
 } RessourcesJeu;
 
@@ -18,7 +23,12 @@ BITMAP *resize_bitmap(BITMAP *src, float scale);
 int charger_ressources_jeu(RessourcesJeu *ressources,
                            const char *fond_path,
                            const char *player_path,
-                           const char *bulle_path);
+                           const char *mangemort_path,
+                           const char *vifdor_path,
+                           const char *tir_path,
+                           const char *feu_path,
+                           const char *chapeau_path,
+                           const char *explosion_path);
 void dessiner_menu_depart(const RessourcesJeu *ressources, int selection, int repriseDisponible);
 void dessiner_menu_parametres(const RessourcesJeu *ressources,
                               int selection,

@@ -19,32 +19,37 @@ static void copier_configuration_dans_etat(EtatJeu *etat, const ConfigurationJeu
     etat->projectileW = configuration->projectileLargeur;
     etat->projectileH = configuration->projectileHauteur;
     etat->projectileSpeed = configuration->projectileVitesse;
+    etat->chapeauW = configuration->chapeauLargeur;
+    etat->chapeauH = configuration->chapeauHauteur;
+    etat->explosionW = configuration->explosionLargeur;
+    etat->explosionH = configuration->explosionHauteur;
 }
 
 static void configurer_bulle(Bulle *bulle, TailleBulle taille, const ConfigurationJeu *configuration) {
+    bulle->type = ENTITE_MANGE_MORT;
     bulle->taille = taille;
     bulle->largeur = configuration->largeurBulles[(int) taille];
     bulle->hauteur = configuration->hauteurBulles[(int) taille];
 
     switch (taille) {
         case BULLE_TRES_GRANDE:
-            bulle->gravite = 0.28f;
-            bulle->rebondSol = -16.0f;
+            bulle->gravite = 0.035f;
+            bulle->rebondSol = -5.4f;
             bulle->attenuationX = 0.995f;
             break;
         case BULLE_GRANDE:
-            bulle->gravite = 0.26f;
-            bulle->rebondSol = -13.0f;
+            bulle->gravite = 0.035f;
+            bulle->rebondSol = -5.0f;
             bulle->attenuationX = 0.992f;
             break;
         case BULLE_MOYENNE:
-            bulle->gravite = 0.24f;
-            bulle->rebondSol = -10.0f;
+            bulle->gravite = 0.030f;
+            bulle->rebondSol = -4.5f;
             bulle->attenuationX = 0.989f;
             break;
         case BULLE_PETITE:
-            bulle->gravite = 0.22f;
-            bulle->rebondSol = -11.5f;
+            bulle->gravite = 0.028f;
+            bulle->rebondSol = -5.0f;
             bulle->attenuationX = 0.985f;
             break;
         case BULLE_TAILLES_TOTAL:
@@ -72,22 +77,23 @@ static int reserver_bulles(EtatJeu *etat, int nouvelleCapacite) {
 static float vitesse_horizontale_fille(TailleBulle taille) {
     switch (taille) {
         case BULLE_TRES_GRANDE:
-            return 0.9f;
+            return 0.18f;
         case BULLE_GRANDE:
-            return 1.0f;
+            return 0.20f;
         case BULLE_MOYENNE:
-            return 1.0f;
+            return 0.22f;
         case BULLE_PETITE:
-            return 1.0f;
+            return 0.25f;
         case BULLE_TAILLES_TOTAL:
             break;
     }
 
-    return 1.5f;
+    return 0.20f;
 }
 
 static int ajouter_bulle(EtatJeu *etat,
                          const ConfigurationJeu *configuration,
+                         TypeEntite type,
                          float x,
                          float y,
                          float vx,
@@ -109,6 +115,7 @@ static int ajouter_bulle(EtatJeu *etat,
 
     bulle = &etat->bulles[etat->nbBulles];
     configurer_bulle(bulle, taille, configuration);
+    bulle->type = type;
     bulle->x = x;
     bulle->y = y;
     bulle->vx = vx;
@@ -129,6 +136,29 @@ static void supprimer_bulle(EtatJeu *etat, int index) {
     }
 }
 
+static void faire_apparaitre_chapeau(EtatJeu *etat, const Bulle *source) {
+    if (!etat || !source) {
+        return;
+    }
+
+    etat->chapeauVisible = 1;
+    etat->chapeauX = (int) (source->x + source->largeur / 2 - etat->chapeauW / 2);
+    etat->chapeauY = (int) (source->y + source->hauteur / 2 - etat->chapeauH / 2);
+    etat->chapeauVx = source->vx >= 0.0f ? 0.45f : -0.45f;
+    etat->chapeauVy = -2.8f;
+}
+
+static void declencher_explosion(EtatJeu *etat, const Bulle *source) {
+    if (!etat || !source) {
+        return;
+    }
+
+    etat->explosionActive = 1;
+    etat->explosionTimer = 18;
+    etat->explosionX = (int) (source->x + source->largeur / 2 - etat->explosionW / 2);
+    etat->explosionY = (int) (source->y + source->hauteur / 2 - etat->explosionH / 2);
+}
+
 static void separer_bulle(EtatJeu *etat, const ConfigurationJeu *configuration, int index) {
     Bulle source;
     TailleBulle nouvelleTaille;
@@ -144,6 +174,9 @@ static void separer_bulle(EtatJeu *etat, const ConfigurationJeu *configuration, 
 
     source = etat->bulles[index];
     if (source.taille == BULLE_PETITE) {
+        if (source.type == ENTITE_VIF_DOR) {
+            faire_apparaitre_chapeau(etat, &source);
+        }
         supprimer_bulle(etat, index);
         return;
     }
@@ -158,6 +191,7 @@ static void separer_bulle(EtatJeu *etat, const ConfigurationJeu *configuration, 
     supprimer_bulle(etat, index);
     ajouter_bulle(etat,
                   configuration,
+                  source.type,
                   centreX - largeurFille / 2.0f - largeurFille * 0.15f,
                   centreY - hauteurFille / 2.0f,
                   -vxFille,
@@ -165,6 +199,7 @@ static void separer_bulle(EtatJeu *etat, const ConfigurationJeu *configuration, 
                   nouvelleTaille);
     ajouter_bulle(etat,
                   configuration,
+                  source.type,
                   centreX - largeurFille / 2.0f + largeurFille * 0.15f,
                   centreY - hauteurFille / 2.0f,
                   vxFille,
@@ -186,11 +221,11 @@ static void update_bulle(Bulle *bulle, const EtatJeu *etat) {
         bulle->vy = bulle->rebondSol;
         bulle->vx *= bulle->attenuationX;
 
-        if (bulle->vx > 0.0f && bulle->vx < 1.5f) {
-            bulle->vx = 1.5f;
+        if (bulle->vx > 0.0f && bulle->vx < 0.35f) {
+            bulle->vx = 0.35f;
         }
-        if (bulle->vx < 0.0f && bulle->vx > -1.5f) {
-            bulle->vx = -1.5f;
+        if (bulle->vx < 0.0f && bulle->vx > -0.35f) {
+            bulle->vx = -0.35f;
         }
     }
 
@@ -250,6 +285,45 @@ static int joueur_touche(const EtatJeu *etat, const ConfigurationJeu *configurat
     return 0;
 }
 
+static int joueur_touche_chapeau(const EtatJeu *etat, const ConfigurationJeu *configuration) {
+    if (!etat || !configuration || !etat->chapeauVisible) {
+        return 0;
+    }
+
+    return collision_rect((float) etat->x,
+                          (float) etat->y,
+                          configuration->joueurLargeur,
+                          configuration->joueurHauteur,
+                          (float) etat->chapeauX,
+                          (float) etat->chapeauY,
+                          etat->chapeauW,
+                          etat->chapeauH);
+}
+
+static void mettre_a_jour_chapeau(EtatJeu *etat) {
+    if (!etat || !etat->chapeauVisible) {
+        return;
+    }
+
+    etat->chapeauVy += 0.06f;
+    etat->chapeauX += (int) etat->chapeauVx;
+    etat->chapeauY += (int) etat->chapeauVy;
+
+    if (etat->chapeauY + etat->chapeauH >= etat->groundY) {
+        etat->chapeauY = etat->groundY - etat->chapeauH;
+        etat->chapeauVy = -2.6f;
+    }
+
+    if (etat->chapeauX < etat->leftLimit) {
+        etat->chapeauX = etat->leftLimit;
+        etat->chapeauVx = -etat->chapeauVx;
+    }
+    if (etat->chapeauX + etat->chapeauW > etat->rightLimit) {
+        etat->chapeauX = etat->rightLimit - etat->chapeauW;
+        etat->chapeauVx = -etat->chapeauVx;
+    }
+}
+
 static void vider_bulles(EtatJeu *etat) {
     if (!etat) {
         return;
@@ -266,56 +340,79 @@ static int charger_niveau(EtatJeu *etat, const ConfigurationJeu *configuration, 
         case 1:
             return ajouter_bulle(etat,
                                  configuration,
+                                 ENTITE_MANGE_MORT,
                                  largeur * 0.68f,
                                  hauteur * 0.14f,
-                                 -0.8f,
+                                 -0.18f,
                                  0.0f,
                                  BULLE_GRANDE);
         case 2:
             return ajouter_bulle(etat,
                                  configuration,
+                                 ENTITE_MANGE_MORT,
                                  largeur * 0.72f,
                                  hauteur * 0.11f,
-                                 -1.1f,
+                                 -0.22f,
                                  0.0f,
                                  BULLE_TRES_GRANDE);
         case 3:
             return ajouter_bulle(etat,
                                  configuration,
+                                 ENTITE_MANGE_MORT,
                                  largeur * 0.28f,
                                  hauteur * 0.11f,
-                                 1.0f,
+                                 0.20f,
                                  0.0f,
                                  BULLE_GRANDE) &&
                    ajouter_bulle(etat,
                                  configuration,
+                                 ENTITE_MANGE_MORT,
                                  largeur * 0.72f,
                                  hauteur * 0.11f,
-                                 -1.3f,
-                                 0.0f,
-                                 BULLE_TRES_GRANDE);
-        case 4:
-            return ajouter_bulle(etat,
-                                 configuration,
-                                 largeur * 0.20f,
-                                 hauteur * 0.10f,
-                                 1.4f,
+                                 -0.28f,
                                  0.0f,
                                  BULLE_TRES_GRANDE) &&
                    ajouter_bulle(etat,
                                  configuration,
+                                 ENTITE_VIF_DOR,
+                                 largeur * 0.48f,
+                                 hauteur * 0.08f,
+                                 0.32f,
+                                 0.0f,
+                                 BULLE_MOYENNE);
+        case 4:
+            return ajouter_bulle(etat,
+                                 configuration,
+                                 ENTITE_MANGE_MORT,
+                                 largeur * 0.20f,
+                                 hauteur * 0.10f,
+                                 0.28f,
+                                 0.0f,
+                                 BULLE_TRES_GRANDE) &&
+                   ajouter_bulle(etat,
+                                 configuration,
+                                 ENTITE_MANGE_MORT,
                                  largeur * 0.52f,
                                  hauteur * 0.17f,
-                                 -1.2f,
+                                 -0.24f,
                                  0.0f,
                                  BULLE_GRANDE) &&
                    ajouter_bulle(etat,
                                  configuration,
+                                 ENTITE_MANGE_MORT,
                                  largeur * 0.78f,
                                  hauteur * 0.10f,
-                                 -1.6f,
+                                 -0.35f,
+                                  0.0f,
+                                 BULLE_TRES_GRANDE) &&
+                   ajouter_bulle(etat,
+                                 configuration,
+                                 ENTITE_VIF_DOR,
+                                 largeur * 0.50f,
+                                 hauteur * 0.07f,
+                                 0.36f,
                                  0.0f,
-                                 BULLE_TRES_GRANDE);
+                                 BULLE_MOYENNE);
         default:
             return 0;
     }
@@ -361,6 +458,16 @@ int reinitialiser_partie(EtatJeu *etat, const ConfigurationJeu *configuration, i
     etat->projectileActive = 0;
     etat->projectileX = 0;
     etat->projectileY = 0;
+    etat->chapeauVisible = 0;
+    etat->chapeauX = 0;
+    etat->chapeauY = 0;
+    etat->chapeauVx = 0.0f;
+    etat->chapeauVy = 0.0f;
+    etat->explosionActive = 0;
+    etat->explosionX = 0;
+    etat->explosionY = 0;
+    etat->explosionTimer = 0;
+    etat->modeFeuActif = 0;
     etat->perdu = 0;
     etat->gagne = 0;
 
@@ -422,13 +529,35 @@ void mettre_a_jour_logique_jeu(EtatJeu *etat,
     }
 
     update_bulles(etat);
+    mettre_a_jour_chapeau(etat);
 
     if (etat->projectileActive) {
         idxTouchee = collision_projectile_bulles(etat);
         if (idxTouchee != -1) {
+            Bulle touchee = etat->bulles[idxTouchee];
+
             etat->projectileActive = 0;
-            separer_bulle(etat, configuration, idxTouchee);
+            declencher_explosion(etat, &touchee);
+            if (etat->modeFeuActif) {
+                supprimer_bulle(etat, idxTouchee);
+            } else {
+                separer_bulle(etat, configuration, idxTouchee);
+            }
         }
+    }
+
+    if (etat->explosionActive) {
+        etat->explosionTimer--;
+        if (etat->explosionTimer <= 0) {
+            etat->explosionActive = 0;
+        }
+    }
+
+    if (joueur_touche_chapeau(etat, configuration)) {
+        etat->chapeauVisible = 0;
+        etat->chapeauVx = 0.0f;
+        etat->chapeauVy = 0.0f;
+        etat->modeFeuActif = 1;
     }
 
     if (joueur_touche(etat, configuration)) {
