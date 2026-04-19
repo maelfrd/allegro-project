@@ -21,6 +21,7 @@ static void initialiser_ressources_vides(RessourcesJeu *ressources) {
     for (i = 0; i < BULLE_TAILLES_TOTAL; i++) {
         ressources->sprites[i] = NULL;
         ressources->spritesVifDor[i] = NULL;
+        ressources->spritesVolDeMort[i] = NULL;
     }
 }
 
@@ -175,6 +176,8 @@ static void dessiner_scene_jeu(BITMAP *buffer, const RessourcesJeu *ressources, 
 
         if (etat->bulles[i].type == ENTITE_VIF_DOR) {
             sprite = ressources->spritesVifDor[(int) etat->bulles[i].taille];
+        } else if (etat->bulles[i].type == ENTITE_VOL_DE_MORT) {
+            sprite = ressources->spritesVolDeMort[(int) etat->bulles[i].taille];
         } else {
             sprite = ressources->sprites[(int) etat->bulles[i].taille];
         }
@@ -202,28 +205,50 @@ static void dessiner_scene_jeu(BITMAP *buffer, const RessourcesJeu *ressources, 
                 ressources->player->w,
                 ressources->player->h);
 
-    if (etat->projectileActive && (etat->modeFeuActif ? ressources->feu : ressources->tir)) {
-        BITMAP *projectileSprite = etat->modeFeuActif ? ressources->feu : ressources->tir;
+    if (etat->tirActif &&
+        ((etat->typeBonusActif == BONUS_LANCE_FLAMMES) ? ressources->feu : ressources->tir)) {
+        BITMAP *spriteTir = etat->typeBonusActif == BONUS_LANCE_FLAMMES ? ressources->feu : ressources->tir;
 
-        masked_blit(projectileSprite,
+        masked_blit(spriteTir,
                     buffer,
                     0,
                     0,
-                    etat->projectileX - projectileSprite->w / 2 + etat->projectileW / 2,
-                    etat->projectileY - projectileSprite->h + etat->projectileH,
-                    projectileSprite->w,
-                    projectileSprite->h);
+                    etat->tirX - spriteTir->w / 2 + etat->tirLargeur / 2,
+                    etat->tirY - spriteTir->h + etat->tirHauteur,
+                    spriteTir->w,
+                    spriteTir->h);
     }
 
-    if (etat->chapeauVisible && ressources->chapeau) {
-        masked_blit(ressources->chapeau,
+    if (etat->tirSecondaireActif && ressources->tir) {
+        masked_blit(ressources->tir,
                     buffer,
                     0,
                     0,
-                    etat->chapeauX,
-                    etat->chapeauY,
-                    ressources->chapeau->w,
-                    ressources->chapeau->h);
+                    etat->tirSecondaireX - ressources->tir->w / 2 + etat->tirLargeur / 2,
+                    etat->tirSecondaireY - ressources->tir->h + etat->tirHauteur,
+                    ressources->tir->w,
+                    ressources->tir->h);
+    }
+
+    if (etat->bonusVisible) {
+        BITMAP *bonusSprite;
+
+        if (etat->typeBonusQuiTombe == BONUS_LANCE_FLAMMES) {
+            bonusSprite = ressources->feu;
+        } else if (etat->typeBonusQuiTombe == BONUS_DOUBLE_TIR) {
+            bonusSprite = ressources->tir;
+        } else {
+            bonusSprite = ressources->chapeau;
+        }
+
+        if (bonusSprite) {
+            stretch_sprite(buffer,
+                           bonusSprite,
+                           etat->bonusX,
+                           etat->bonusY,
+                           etat->bonusLargeur,
+                           etat->bonusHauteur);
+        }
     }
 
     if (etat->explosionActive && ressources->explosion) {
@@ -235,6 +260,35 @@ static void dessiner_scene_jeu(BITMAP *buffer, const RessourcesJeu *ressources, 
                     etat->explosionY,
                     ressources->explosion->w,
                     ressources->explosion->h);
+    }
+
+    for (i = 0; i < etat->nbEclairs; i++) {
+        int x = (int) etat->eclairs[i].x;
+        int y = (int) etat->eclairs[i].y;
+        int largeur = etat->eclairs[i].largeur;
+        int hauteur = etat->eclairs[i].hauteur;
+        int segment = hauteur / 4;
+        int centre = x + largeur / 2;
+        int couleur = makecol(255, 230, 60);
+
+        line(buffer, centre, y, x, y + segment, couleur);
+        line(buffer, x, y + segment, centre + largeur / 4, y + segment * 2, couleur);
+        line(buffer, centre + largeur / 4, y + segment * 2, x + largeur / 3, y + segment * 3, couleur);
+        line(buffer, x + largeur / 3, y + segment * 3, centre + largeur / 2, y + hauteur, couleur);
+        line(buffer, centre + 1, y, x + 1, y + segment, makecol(255, 255, 255));
+        line(buffer, x + 1, y + segment, centre + largeur / 4 + 1, y + segment * 2, makecol(255, 255, 255));
+        line(buffer,
+             centre + largeur / 4 + 1,
+             y + segment * 2,
+             x + largeur / 3 + 1,
+             y + segment * 3,
+             makecol(255, 255, 255));
+        line(buffer,
+             x + largeur / 3 + 1,
+             y + segment * 3,
+             centre + largeur / 2 + 1,
+             y + hauteur,
+             makecol(255, 255, 255));
     }
 }
 
@@ -378,6 +432,7 @@ int charger_ressources_jeu(RessourcesJeu *ressources,
                            const char *player_path,
                            const char *mangemort_path,
                            const char *vifdor_path,
+                           const char *voldemort_path,
                            const char *tir_path,
                            const char *feu_path,
                            const char *chapeau_path,
@@ -385,6 +440,7 @@ int charger_ressources_jeu(RessourcesJeu *ressources,
     BITMAP *player_orig;
     BITMAP *bulle_orig;
     BITMAP *vifdor_orig;
+    BITMAP *voldemort_orig;
     BITMAP *tir_orig;
     BITMAP *feu_orig;
     BITMAP *chapeau_orig;
@@ -422,7 +478,7 @@ int charger_ressources_jeu(RessourcesJeu *ressources,
         return 0;
     }
 
-    ressources->tir = resize_bitmap(tir_orig, 0.18f);
+    ressources->tir = resize_bitmap(tir_orig, 0.34f);
     destroy_bitmap(tir_orig);
     if (!ressources->tir) {
         allegro_message("Erreur resize tir");
@@ -436,7 +492,7 @@ int charger_ressources_jeu(RessourcesJeu *ressources,
         return 0;
     }
 
-    ressources->feu = resize_bitmap(feu_orig, 0.18f);
+    ressources->feu = resize_bitmap(feu_orig, 0.34f);
     destroy_bitmap(feu_orig);
     if (!ressources->feu) {
         allegro_message("Erreur resize feu");
@@ -464,7 +520,7 @@ int charger_ressources_jeu(RessourcesJeu *ressources,
         return 0;
     }
 
-    ressources->explosion = resize_bitmap(explosion_orig, 1.10f);
+    ressources->explosion = resize_bitmap(explosion_orig, 1.90f);
     destroy_bitmap(explosion_orig);
     if (!ressources->explosion) {
         allegro_message("Erreur resize explosion");
@@ -523,6 +579,40 @@ int charger_ressources_jeu(RessourcesJeu *ressources,
         !ressources->spritesVifDor[BULLE_MOYENNE] ||
         !ressources->spritesVifDor[BULLE_PETITE]) {
         allegro_message("Erreur resize vif d'or");
+        liberer_ressources_jeu(ressources);
+        return 0;
+    }
+
+    voldemort_orig = charger_bitmap_ou_erreur(voldemort_path);
+    if (!voldemort_orig) {
+        liberer_ressources_jeu(ressources);
+        return 0;
+    }
+
+    ressources->spritesVolDeMort[BULLE_TRES_GRANDE] = resize_bitmap_dimensions(voldemort_orig,
+                                                                                ressources->sprites[BULLE_TRES_GRANDE]->w,
+                                                                                ressources->sprites[BULLE_TRES_GRANDE]->h);
+    ressources->spritesVolDeMort[BULLE_GRANDE] = resize_bitmap_dimensions(voldemort_orig,
+                                                                           ressources->sprites[BULLE_GRANDE]->w,
+                                                                           ressources->sprites[BULLE_GRANDE]->h);
+    ressources->spritesVolDeMort[BULLE_MOYENNE] = resize_bitmap_dimensions(voldemort_orig,
+                                                                            ressources->sprites[BULLE_MOYENNE]->w,
+                                                                            ressources->sprites[BULLE_MOYENNE]->h);
+    ressources->spritesVolDeMort[BULLE_PETITE] = resize_bitmap_dimensions(voldemort_orig,
+                                                                           ressources->sprites[BULLE_PETITE]->w,
+                                                                           ressources->sprites[BULLE_PETITE]->h);
+    destroy_bitmap(voldemort_orig);
+
+    normaliser_transparence_magenta(ressources->spritesVolDeMort[BULLE_TRES_GRANDE]);
+    normaliser_transparence_magenta(ressources->spritesVolDeMort[BULLE_GRANDE]);
+    normaliser_transparence_magenta(ressources->spritesVolDeMort[BULLE_MOYENNE]);
+    normaliser_transparence_magenta(ressources->spritesVolDeMort[BULLE_PETITE]);
+
+    if (!ressources->spritesVolDeMort[BULLE_TRES_GRANDE] ||
+        !ressources->spritesVolDeMort[BULLE_GRANDE] ||
+        !ressources->spritesVolDeMort[BULLE_MOYENNE] ||
+        !ressources->spritesVolDeMort[BULLE_PETITE]) {
+        allegro_message("Erreur resize vol de mort");
         liberer_ressources_jeu(ressources);
         return 0;
     }
@@ -629,7 +719,8 @@ void dessiner_menu_parametres(const RessourcesJeu *ressources,
         dessiner_option_menu(ressources->buffer, "Demo niveau 2", yBase + pasVertical * 2, selection == 2, 1);
         dessiner_option_menu(ressources->buffer, "Demo niveau 3", yBase + pasVertical * 3, selection == 3, 1);
         dessiner_option_menu(ressources->buffer, "Demo niveau 4", yBase + pasVertical * 4, selection == 4, 1);
-        dessiner_option_menu(ressources->buffer, "Retour", yBase + pasVertical * 5, selection == 5, 1);
+        dessiner_option_menu(ressources->buffer, "Demo niveau 5", yBase + pasVertical * 5, selection == 5, 1);
+        dessiner_option_menu(ressources->buffer, "Retour", yBase + pasVertical * 6, selection == 6, 1);
     } else {
         dessiner_option_menu(ressources->buffer, "Retour", yBase + pasVertical, selection == 1, 1);
     }
@@ -745,7 +836,21 @@ void dessiner_decompte_depart(const RessourcesJeu *ressources, const EtatJeu *et
     blit(ressources->buffer, screen, 0, 0, 0, 0, SCREEN_W, SCREEN_H);
 }
 
-void dessiner_jeu(const RessourcesJeu *ressources, const EtatJeu *etat) {
+void dessiner_jeu(const RessourcesJeu *ressources, const EtatJeu *etat, int selectionDefaite) {
+    char lignePseudo[64];
+    char ligneBonus[64];
+    char ligneScore[32];
+    char tempsRestant[16];
+    int secondesRestantes;
+    int secondesPouvoir;
+    int positionY;
+    static const char *optionsDefaite[] = {
+        "Recommencer niveau",
+        "Nouvelle partie",
+        "Retour au menu",
+        "Sauvegarder partie"
+    };
+
     if (!ressources || !etat || !ressources->buffer || !ressources->player) {
         return;
     }
@@ -760,18 +865,89 @@ void dessiner_jeu(const RessourcesJeu *ressources, const EtatJeu *etat) {
                   "Niveau %d/%d",
                   etat->niveau,
                   etat->niveauMaximum);
-    if (etat->modeFeuActif) {
-        textout_ex(ressources->buffer,
-                   font,
-                   "Pouvoir feu actif",
-                   SCREEN_W / 40,
-                   SCREEN_H / 18,
-                   makecol(255, 120, 60),
-                   -1);
+    positionY = SCREEN_H / 36 + text_height(font) + 4;
+    uszprintf(lignePseudo,
+              sizeof(lignePseudo),
+              "Pseudo: %s",
+              etat->pseudo[0] != '\0' ? etat->pseudo : "joueur");
+    textout_ex(ressources->buffer,
+               font,
+               lignePseudo,
+               SCREEN_W / 40,
+               positionY,
+               makecol(255, 255, 255),
+               -1);
+    positionY += text_height(font) + 2;
+
+    secondesRestantes = (etat->tempsRestantMs + 999) / 1000;
+    uszprintf(tempsRestant, sizeof(tempsRestant), "%d s", secondesRestantes);
+    if (etat->typeBonusActif == BONUS_LANCE_FLAMMES) {
+        secondesPouvoir = (etat->tempsBonusActifMs + 999) / 1000;
+        uszprintf(ligneBonus, sizeof(ligneBonus), "Bonus: Lance-flammes %d s", secondesPouvoir);
+    } else if (etat->typeBonusActif == BONUS_DOUBLE_TIR) {
+        secondesPouvoir = (etat->tempsBonusActifMs + 999) / 1000;
+        uszprintf(ligneBonus, sizeof(ligneBonus), "Bonus: Double tir %d s", secondesPouvoir);
+    } else if (etat->typeBonusActif == BONUS_CHAPEAU) {
+        secondesPouvoir = (etat->tempsBonusActifMs + 999) / 1000;
+        uszprintf(ligneBonus, sizeof(ligneBonus), "Bonus: Chapeau %d s", secondesPouvoir);
+    } else {
+        uszprintf(ligneBonus, sizeof(ligneBonus), "Bonus: Aucun");
     }
+    textout_ex(ressources->buffer,
+               font,
+               ligneBonus,
+               SCREEN_W / 40,
+               positionY,
+               makecol(255, 255, 255),
+               -1);
+    positionY += text_height(font) + 2;
+
+    uszprintf(ligneScore, sizeof(ligneScore), "Score: %d", etat->score);
+    textout_ex(ressources->buffer,
+               font,
+               ligneScore,
+               SCREEN_W / 40,
+               positionY,
+               makecol(255, 255, 255),
+               -1);
+    positionY += text_height(font) + 2;
+
+    textprintf_ex(ressources->buffer,
+                  font,
+                  SCREEN_W / 40,
+                  positionY,
+                  makecol(255, 255, 255),
+                  -1,
+                  "Temps: %s",
+                  tempsRestant);
 
     if (etat->perdu) {
-        afficher_message_centre(ressources->buffer, SCREEN_W / 7, makecol(255, 0, 0), makecol(255, 0, 0), "PERDU");
+        int i;
+        int yBase = SCREEN_H / 2 - SCREEN_H / 20;
+        int pasVertical = SCREEN_H / 18;
+
+        dessiner_panneau_menu(ressources->buffer, SCREEN_W / 4, SCREEN_H / 4);
+        textout_centre_ex(ressources->buffer,
+                          font,
+                          "PERDU",
+                          SCREEN_W / 2,
+                          SCREEN_H / 2 - SCREEN_H / 6,
+                          makecol(255, 80, 80),
+                          -1);
+        for (i = 0; i < 4; i++) {
+            dessiner_option_menu(ressources->buffer,
+                                 optionsDefaite[i],
+                                 yBase + i * pasVertical,
+                                 selectionDefaite == i,
+                                 1);
+        }
+        textout_centre_ex(ressources->buffer,
+                          font,
+                          "Haut/Bas puis Entree",
+                          SCREEN_W / 2,
+                          SCREEN_H / 2 + SCREEN_H / 5,
+                          makecol(180, 180, 180),
+                          -1);
     }
     if (etat->gagne) {
         if (etat->niveau < etat->niveauMaximum) {
@@ -802,6 +978,7 @@ void liberer_ressources_jeu(RessourcesJeu *ressources) {
     for (i = 0; i < BULLE_TAILLES_TOTAL; i++) {
         liberer_bitmap(&ressources->sprites[i]);
         liberer_bitmap(&ressources->spritesVifDor[i]);
+        liberer_bitmap(&ressources->spritesVolDeMort[i]);
     }
     liberer_bitmap(&ressources->player);
     liberer_bitmap(&ressources->tir);

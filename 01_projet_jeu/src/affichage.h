@@ -14,6 +14,7 @@ typedef struct {
     BITMAP *explosion;
     BITMAP *sprites[BULLE_TAILLES_TOTAL];
     BITMAP *spritesVifDor[BULLE_TAILLES_TOTAL];
+    BITMAP *spritesVolDeMort[BULLE_TAILLES_TOTAL];
     BITMAP *buffer;
 } RessourcesJeu;
 
@@ -25,6 +26,7 @@ int charger_ressources_jeu(RessourcesJeu *ressources,
                            const char *player_path,
                            const char *mangemort_path,
                            const char *vifdor_path,
+                           const char *voldemort_path,
                            const char *tir_path,
                            const char *feu_path,
                            const char *chapeau_path,
@@ -40,7 +42,7 @@ void dessiner_ecran_information(const RessourcesJeu *ressources,
                                 const char *ligne3);
 void dessiner_saisie_pseudo(const RessourcesJeu *ressources, const char *pseudo);
 void dessiner_decompte_depart(const RessourcesJeu *ressources, const EtatJeu *etat, int valeur);
-void dessiner_jeu(const RessourcesJeu *ressources, const EtatJeu *etat);
+void dessiner_jeu(const RessourcesJeu *ressources, const EtatJeu *etat, int selectionDefaite);
 void liberer_bitmap(BITMAP **bitmap);
 void liberer_ressources_jeu(RessourcesJeu *ressources);
 void fermer_affichage(void);

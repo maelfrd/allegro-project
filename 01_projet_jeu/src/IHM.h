@@ -8,13 +8,16 @@ typedef struct {
     int sauvegarder;
     int charger;
     int nouvellePartie;
+    int nouvellePartieJeu;
     int reprendrePartie;
     int ouvrirParametres;
     int ouvrirRegles;
     int retourMenu;
+    int recommencerNiveau;
     int valider;
     int menuSelection;
     int parametresSelection;
+    int defaiteSelection;
     int basculerModeDemonstration;
     int lancerDemoNiveau;
     int oldMenuUpState;
@@ -31,7 +34,11 @@ void initialiser_actions_ihm(ActionsIHM *actions);
 void traiter_ihm_menu(ActionsIHM *actions, int repriseDisponible);
 void traiter_ihm_ecran_secondaire(ActionsIHM *actions);
 void traiter_ihm_parametres(ActionsIHM *actions, int modeDemonstrationActif);
-void traiter_ihm_jeu(ActionsIHM *actions, CommandesJeu *commandes, int partieBloquee);
+void traiter_ihm_jeu(ActionsIHM *actions,
+                     CommandesJeu *commandes,
+                     int partiePerdue,
+                     int partieGagnee,
+                     int tirContinuActif);
 void traiter_ihm_saisie_pseudo(ActionsIHM *actions, char *pseudo, int taillePseudo);
 
 #endif
