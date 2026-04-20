@@ -33,9 +33,11 @@ typedef struct {
     int explosionW;
     int explosionH;
     int explosionTimer;
-    int modeFeuActif;
+    int auraArdenteActive;
+    int dureeRestanteAuraArdenteMs;
     int perdu;
     int gagne;
+    int score;
     char pseudo[TAILLE_PSEUDO_MAX];
 } EtatJeuSauvegarde;
 
@@ -51,6 +53,7 @@ typedef struct {
     float attenuationX;
     int largeur;
     int hauteur;
+    int nombreCoupsAvantDivision;
 } BulleSauvegardee;
 
 static void copier_vers_sauvegarde(const EtatJeu *source, EtatJeuSauvegarde *destination) {
@@ -61,7 +64,7 @@ static void copier_vers_sauvegarde(const EtatJeu *source, EtatJeuSauvegarde *des
         destination->niveau = 1;
     }
     if (destination->niveauMaximum < 1) {
-        destination->niveauMaximum = 4;
+        destination->niveauMaximum = 5;
     }
     if (destination->niveau > destination->niveauMaximum) {
         destination->niveau = destination->niveauMaximum;
@@ -91,9 +94,11 @@ static void copier_vers_sauvegarde(const EtatJeu *source, EtatJeuSauvegarde *des
     destination->explosionW = source->explosionW;
     destination->explosionH = source->explosionH;
     destination->explosionTimer = source->explosionTimer;
-    destination->modeFeuActif = source->modeFeuActif;
+    destination->auraArdenteActive = source->auraArdenteActive;
+    destination->dureeRestanteAuraArdenteMs = source->dureeRestanteAuraArdenteMs;
     destination->perdu = source->perdu;
     destination->gagne = source->gagne;
+    destination->score = source->score;
     strncpy(destination->pseudo, source->pseudo, TAILLE_PSEUDO_MAX);
 }
 
@@ -112,6 +117,7 @@ static void copier_bulles_vers_sauvegarde(const EtatJeu *source, BulleSauvegarde
         destination[i].attenuationX = source->bulles[i].attenuationX;
         destination[i].largeur = source->bulles[i].largeur;
         destination[i].hauteur = source->bulles[i].hauteur;
+        destination[i].nombreCoupsAvantDivision = source->bulles[i].nombreCoupsAvantDivision;
     }
 }
 
@@ -165,9 +171,11 @@ static void copier_depuis_sauvegarde(const EtatJeuSauvegarde *source,
     destination->explosionW = source->explosionW;
     destination->explosionH = source->explosionH;
     destination->explosionTimer = source->explosionTimer;
-    destination->modeFeuActif = source->modeFeuActif;
+    destination->auraArdenteActive = source->auraArdenteActive;
+    destination->dureeRestanteAuraArdenteMs = source->dureeRestanteAuraArdenteMs;
     destination->perdu = source->perdu;
     destination->gagne = source->gagne;
+    destination->score = source->score;
     strncpy(destination->pseudo, source->pseudo, TAILLE_PSEUDO_MAX);
     destination->pseudo[TAILLE_PSEUDO_MAX - 1] = '\0';
 
@@ -183,6 +191,7 @@ static void copier_depuis_sauvegarde(const EtatJeuSauvegarde *source,
         destination->bulles[i].attenuationX = bullesSauvegardees[i].attenuationX;
         destination->bulles[i].largeur = bullesSauvegardees[i].largeur;
         destination->bulles[i].hauteur = bullesSauvegardees[i].hauteur;
+        destination->bulles[i].nombreCoupsAvantDivision = bullesSauvegardees[i].nombreCoupsAvantDivision;
     }
 }
 

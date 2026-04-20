@@ -1,5 +1,8 @@
 #include "affichage.h"
 
+#include <stdio.h>
+#include <string.h>
+
 enum {
     MENU_NOUVELLE_PARTIE = 0,
     MENU_REPRENDRE_PARTIE,
@@ -12,6 +15,9 @@ static void initialiser_ressources_vides(RessourcesJeu *ressources) {
     int i;
 
     ressources->fond = NULL;
+    for (i = 0; i < NOMBRE_FONDS_NIVEAUX; i++) {
+        ressources->fondsNiveaux[i] = NULL;
+    }
     ressources->player = NULL;
     ressources->tir = NULL;
     ressources->feu = NULL;
@@ -21,6 +27,7 @@ static void initialiser_ressources_vides(RessourcesJeu *ressources) {
     for (i = 0; i < BULLE_TAILLES_TOTAL; i++) {
         ressources->sprites[i] = NULL;
         ressources->spritesVifDor[i] = NULL;
+        ressources->spritesVolDeMort[i] = NULL;
     }
 }
 
@@ -66,16 +73,30 @@ static void afficher_message_centre(BITMAP *buffer,
                       -1);
 }
 
+static BITMAP *obtenir_fond_niveau(const RessourcesJeu *ressources, int niveau) {
+    if (!ressources) {
+        return NULL;
+    }
+
+    if (niveau >= 1 && niveau <= NOMBRE_FONDS_NIVEAUX && ressources->fondsNiveaux[niveau - 1]) {
+        return ressources->fondsNiveaux[niveau - 1];
+    }
+
+    return ressources->fond;
+}
+
 static void dessiner_fond_scene(BITMAP *buffer, const RessourcesJeu *ressources) {
+    BITMAP *fond = obtenir_fond_niveau(ressources, 1);
+
     clear_to_color(buffer, makecol(0, 0, 0));
 
-    if (ressources && ressources->fond) {
-        stretch_blit(ressources->fond,
+    if (fond) {
+        stretch_blit(fond,
                      buffer,
                      0,
                      0,
-                     ressources->fond->w,
-                     ressources->fond->h,
+                     fond->w,
+                     fond->h,
                      0,
                      0,
                      SCREEN_W,
@@ -156,12 +177,26 @@ static void dessiner_texte_centre_aggrandi(BITMAP *buffer,
 
 static void dessiner_scene_jeu(BITMAP *buffer, const RessourcesJeu *ressources, const EtatJeu *etat) {
     int i;
+    BITMAP *fond;
 
     if (!buffer || !ressources || !etat || !ressources->player) {
         return;
     }
 
-    dessiner_fond_scene(buffer, ressources);
+    fond = obtenir_fond_niveau(ressources, etat->niveau);
+    clear_to_color(buffer, makecol(0, 0, 0));
+    if (fond) {
+        stretch_blit(fond,
+                     buffer,
+                     0,
+                     0,
+                     fond->w,
+                     fond->h,
+                     0,
+                     0,
+                     SCREEN_W,
+                     SCREEN_H);
+    }
 
     rectfill(buffer,
              0,
@@ -175,6 +210,8 @@ static void dessiner_scene_jeu(BITMAP *buffer, const RessourcesJeu *ressources, 
 
         if (etat->bulles[i].type == ENTITE_VIF_DOR) {
             sprite = ressources->spritesVifDor[(int) etat->bulles[i].taille];
+        } else if (etat->bulles[i].type == ENTITE_VOL_DE_MORT) {
+            sprite = ressources->spritesVolDeMort[(int) etat->bulles[i].taille];
         } else {
             sprite = ressources->sprites[(int) etat->bulles[i].taille];
         }
@@ -202,8 +239,8 @@ static void dessiner_scene_jeu(BITMAP *buffer, const RessourcesJeu *ressources, 
                 ressources->player->w,
                 ressources->player->h);
 
-    if (etat->projectileActive && (etat->modeFeuActif ? ressources->feu : ressources->tir)) {
-        BITMAP *projectileSprite = etat->modeFeuActif ? ressources->feu : ressources->tir;
+    if (etat->projectileActive && ressources->tir) {
+        BITMAP *projectileSprite = ressources->tir;
 
         masked_blit(projectileSprite,
                     buffer,
@@ -213,6 +250,20 @@ static void dessiner_scene_jeu(BITMAP *buffer, const RessourcesJeu *ressources, 
                     etat->projectileY - projectileSprite->h + etat->projectileH,
                     projectileSprite->w,
                     projectileSprite->h);
+    }
+
+    if (etat->auraArdenteActive && ressources->feu) {
+        int effetX = etat->x - ressources->player->w / 4;
+        int effetY = etat->y - ressources->player->h / 3;
+        int effetLargeur = ressources->player->w + ressources->player->w / 2;
+        int effetHauteur = ressources->player->h + ressources->player->h / 2;
+
+        stretch_sprite(buffer,
+                       ressources->feu,
+                       effetX,
+                       effetY,
+                       effetLargeur,
+                       effetHauteur);
     }
 
     if (etat->chapeauVisible && ressources->chapeau) {
@@ -270,6 +321,105 @@ static void dessiner_option_menu(BITMAP *buffer,
     textout_centre_ex(buffer, font, texte, SCREEN_W / 2, y - text_height(font) / 2, couleurTexte, -1);
 }
 
+static void tronquer_texte_pour_largeur(const char *source, char *destination, size_t tailleDestination, int largeurMax) {
+    size_t longueur;
+
+    if (!destination || tailleDestination == 0) {
+        return;
+    }
+
+    destination[0] = '\0';
+    if (!source) {
+        return;
+    }
+
+    strncpy(destination, source, tailleDestination - 1);
+    destination[tailleDestination - 1] = '\0';
+
+    if (text_length(font, destination) <= largeurMax) {
+        return;
+    }
+
+    longueur = strlen(destination);
+    while (longueur > 3) {
+        longueur--;
+        destination[longueur] = '\0';
+        if (snprintf(destination + longueur, tailleDestination - longueur, "...") >= (int) (tailleDestination - longueur)) {
+            break;
+        }
+        if (text_length(font, destination) <= largeurMax) {
+            return;
+        }
+        destination[longueur] = '\0';
+    }
+
+    strncpy(destination, "...", tailleDestination - 1);
+    destination[tailleDestination - 1] = '\0';
+}
+
+static void dessiner_panneau_hud(BITMAP *buffer, const EtatJeu *etat) {
+    char ligne[128];
+    char pseudo[TAILLE_PSEUDO_MAX + 8];
+    int margeX;
+    int margeY;
+    int largeur;
+    int hauteur;
+    int x1;
+    int y1;
+    int x2;
+    int y2;
+    int y;
+    int interligne;
+    int largeurTexte;
+    float tempsSecondes;
+
+    if (!buffer || !etat) {
+        return;
+    }
+
+    margeX = SCREEN_W / 40;
+    margeY = SCREEN_H / 36;
+    largeur = SCREEN_W / 4;
+    hauteur = SCREEN_H / 6;
+    x1 = margeX;
+    y1 = margeY;
+    x2 = x1 + largeur;
+    y2 = y1 + hauteur;
+    interligne = text_height(font) + SCREEN_H / 90;
+    largeurTexte = largeur - SCREEN_W / 45;
+
+    if (etat->niveau != 1) {
+        rectfill(buffer, x1, y1, x2, y2, makecol(150, 20, 20));
+        rect(buffer, x1, y1, x2, y2, makecol(255, 235, 235));
+        rect(buffer, x1 + 3, y1 + 3, x2 - 3, y2 - 3, makecol(90, 0, 0));
+    }
+
+    y = y1 + SCREEN_H / 70;
+    textout_ex(buffer, font, "HUD JOUEUR", x1 + SCREEN_W / 90, y, makecol(255, 245, 245), -1);
+
+    y += interligne;
+    snprintf(ligne, sizeof(ligne), "Niveau : %d/%d", etat->niveau, etat->niveauMaximum);
+    textout_ex(buffer, font, ligne, x1 + SCREEN_W / 90, y, makecol(255, 255, 255), -1);
+
+    y += interligne;
+    snprintf(ligne, sizeof(ligne), "Score : %d", etat->score);
+    textout_ex(buffer, font, ligne, x1 + SCREEN_W / 90, y, makecol(255, 255, 255), -1);
+
+    y += interligne;
+    snprintf(pseudo, sizeof(pseudo), "Pseudo : %s", etat->pseudo[0] != '\0' ? etat->pseudo : "ANONYME");
+    tronquer_texte_pour_largeur(pseudo, ligne, sizeof(ligne), largeurTexte);
+    textout_ex(buffer, font, ligne, x1 + SCREEN_W / 90, y, makecol(255, 255, 255), -1);
+
+    y += interligne;
+    if (etat->auraArdenteActive) {
+        tempsSecondes = (float) etat->dureeRestanteAuraArdenteMs / 1000.0f;
+        snprintf(ligne, sizeof(ligne), "Aura ardente : %.1f s", tempsSecondes);
+        textout_ex(buffer, font, ligne, x1 + SCREEN_W / 90, y, makecol(255, 240, 120), -1);
+    } else {
+        textout_ex(buffer, font, "Aura ardente : INACTIVE", x1 + SCREEN_W / 90, y, makecol(255, 220, 220), -1);
+    }
+}
+
 static void normaliser_transparence_magenta(BITMAP *bitmap) {
     int x;
     int y;
@@ -294,7 +444,112 @@ static void normaliser_transparence_magenta(BITMAP *bitmap) {
     }
 }
 
-int initialiser_affichage(int largeur, int hauteur, int profondeur_couleur) {
+static int lire_entier_32_le(const unsigned char *octets) {
+    return (int) octets[0] |
+           ((int) octets[1] << 8) |
+           ((int) octets[2] << 16) |
+           ((int) octets[3] << 24);
+}
+
+static int fichier_existe_simple(const char *chemin) {
+    FILE *fichier;
+
+    if (!chemin || chemin[0] == '\0') {
+        return 0;
+    }
+
+    fichier = fopen(chemin, "rb");
+    if (!fichier) {
+        return 0;
+    }
+
+    fclose(fichier);
+    return 1;
+}
+
+static int resoudre_chemin_ressource(const char *chemin, char *destination, size_t taille) {
+    static const char *prefixes[] = {
+        "",
+        "../",
+        "../../",
+        "01_projet_jeu/",
+        "../01_projet_jeu/"
+    };
+    int i;
+
+    if (!chemin || !destination || taille == 0 || chemin[0] == '\0') {
+        return 0;
+    }
+
+    if (chemin[0] == '/') {
+        if (strlen(chemin) + 1 > taille) {
+            return 0;
+        }
+        strcpy(destination, chemin);
+        return fichier_existe_simple(destination);
+    }
+
+    for (i = 0; i < (int) (sizeof(prefixes) / sizeof(prefixes[0])); i++) {
+        if (snprintf(destination, taille, "%s%s", prefixes[i], chemin) >= (int) taille) {
+            continue;
+        }
+        if (fichier_existe_simple(destination)) {
+            return 1;
+        }
+    }
+
+    destination[0] = '\0';
+    return 0;
+}
+
+static int determiner_taille_bitmap(const char *chemin, int *largeur, int *hauteur) {
+    FILE *fichier;
+    char cheminResolu[512];
+    unsigned char entete[26];
+    int hauteurBitmap;
+
+    if (!chemin || !largeur || !hauteur || chemin[0] == '\0') {
+        return 0;
+    }
+
+    if (!resoudre_chemin_ressource(chemin, cheminResolu, sizeof(cheminResolu))) {
+        return 0;
+    }
+
+    fichier = fopen(cheminResolu, "rb");
+    if (!fichier) {
+        return 0;
+    }
+
+    if (fread(entete, 1, sizeof(entete), fichier) != sizeof(entete)) {
+        fclose(fichier);
+        return 0;
+    }
+    fclose(fichier);
+
+    if (entete[0] != 'B' || entete[1] != 'M') {
+        return 0;
+    }
+
+    *largeur = lire_entier_32_le(&entete[18]);
+    hauteurBitmap = lire_entier_32_le(&entete[22]);
+    if (*largeur <= 0 || hauteurBitmap == 0) {
+        return 0;
+    }
+
+    *hauteur = hauteurBitmap < 0 ? -hauteurBitmap : hauteurBitmap;
+    return 1;
+}
+
+int initialiser_affichage(const char *fond_path,
+                          int largeur_defaut,
+                          int hauteur_defaut,
+                          int profondeur_couleur) {
+    int largeur;
+    int hauteur;
+
+    (void) fond_path;
+
     allegro_init();
 
     if (install_keyboard() != 0) {
@@ -303,6 +558,9 @@ int initialiser_affichage(int largeur, int hauteur, int profondeur_couleur) {
     }
 
     set_color_depth(profondeur_couleur);
+    largeur = largeur_defaut;
+    hauteur = hauteur_defaut;
+
     if (set_gfx_mode(GFX_AUTODETECT_WINDOWED, largeur, hauteur, 0, 0) != 0) {
         allegro_message("Erreur mode graphique");
         return 0;
@@ -311,17 +569,29 @@ int initialiser_affichage(int largeur, int hauteur, int profondeur_couleur) {
     return 1;
 }
 
+int ressource_existe(const char *chemin) {
+    char cheminResolu[512];
+
+    return resoudre_chemin_ressource(chemin, cheminResolu, sizeof(cheminResolu));
+}
+
 BITMAP *charger_bitmap_ou_erreur(const char *chemin) {
     BITMAP *bitmap;
+    char cheminResolu[512];
 
     if (!chemin || chemin[0] == '\0') {
         allegro_message("Chemin de bitmap invalide");
         return NULL;
     }
 
-    bitmap = load_bitmap(chemin, NULL);
+    if (!resoudre_chemin_ressource(chemin, cheminResolu, sizeof(cheminResolu))) {
+        allegro_message("Impossible de trouver %s", chemin);
+        return NULL;
+    }
+
+    bitmap = load_bitmap(cheminResolu, NULL);
     if (!bitmap) {
-        allegro_message("Impossible de charger %s", chemin);
+        allegro_message("Impossible de charger %s", cheminResolu);
     }
 
     return bitmap;
@@ -389,6 +659,7 @@ int charger_ressources_jeu(RessourcesJeu *ressources,
     BITMAP *feu_orig;
     BITMAP *chapeau_orig;
     BITMAP *explosion_orig;
+    BITMAP *volDeMortOrig;
 
     if (!ressources) {
         return 0;
@@ -398,6 +669,18 @@ int charger_ressources_jeu(RessourcesJeu *ressources,
 
     ressources->fond = charger_bitmap_ou_erreur(fond_path);
     if (!ressources->fond) {
+        liberer_ressources_jeu(ressources);
+        return 0;
+    }
+    ressources->fondsNiveaux[0] = ressources->fond;
+    ressources->fondsNiveaux[1] = charger_bitmap_ou_erreur("assets/room_24bit.bmp");
+    ressources->fondsNiveaux[2] = charger_bitmap_ou_erreur("assets/library_24bit.bmp");
+    ressources->fondsNiveaux[3] = charger_bitmap_ou_erreur("assets/hall_24bit.bmp");
+    ressources->fondsNiveaux[4] = charger_bitmap_ou_erreur("assets/duel_24bit.bmp");
+    if (!ressources->fondsNiveaux[1] ||
+        !ressources->fondsNiveaux[2] ||
+        !ressources->fondsNiveaux[3] ||
+        !ressources->fondsNiveaux[4]) {
         liberer_ressources_jeu(ressources);
         return 0;
     }
@@ -527,6 +810,40 @@ int charger_ressources_jeu(RessourcesJeu *ressources,
         return 0;
     }
 
+    volDeMortOrig = charger_bitmap_ou_erreur("assets/vol_de_mort.bmp");
+    if (!volDeMortOrig) {
+        liberer_ressources_jeu(ressources);
+        return 0;
+    }
+
+    ressources->spritesVolDeMort[BULLE_TRES_GRANDE] = resize_bitmap_dimensions(volDeMortOrig,
+                                                                                ressources->sprites[BULLE_TRES_GRANDE]->w,
+                                                                                ressources->sprites[BULLE_TRES_GRANDE]->h);
+    ressources->spritesVolDeMort[BULLE_GRANDE] = resize_bitmap_dimensions(volDeMortOrig,
+                                                                           ressources->sprites[BULLE_GRANDE]->w,
+                                                                           ressources->sprites[BULLE_GRANDE]->h);
+    ressources->spritesVolDeMort[BULLE_MOYENNE] = resize_bitmap_dimensions(volDeMortOrig,
+                                                                            ressources->sprites[BULLE_MOYENNE]->w,
+                                                                            ressources->sprites[BULLE_MOYENNE]->h);
+    ressources->spritesVolDeMort[BULLE_PETITE] = resize_bitmap_dimensions(volDeMortOrig,
+                                                                           ressources->sprites[BULLE_PETITE]->w,
+                                                                           ressources->sprites[BULLE_PETITE]->h);
+    destroy_bitmap(volDeMortOrig);
+
+    normaliser_transparence_magenta(ressources->spritesVolDeMort[BULLE_TRES_GRANDE]);
+    normaliser_transparence_magenta(ressources->spritesVolDeMort[BULLE_GRANDE]);
+    normaliser_transparence_magenta(ressources->spritesVolDeMort[BULLE_MOYENNE]);
+    normaliser_transparence_magenta(ressources->spritesVolDeMort[BULLE_PETITE]);
+
+    if (!ressources->spritesVolDeMort[BULLE_TRES_GRANDE] ||
+        !ressources->spritesVolDeMort[BULLE_GRANDE] ||
+        !ressources->spritesVolDeMort[BULLE_MOYENNE] ||
+        !ressources->spritesVolDeMort[BULLE_PETITE]) {
+        allegro_message("Erreur resize vol de mort");
+        liberer_ressources_jeu(ressources);
+        return 0;
+    }
+
     ressources->buffer = create_bitmap(SCREEN_W, SCREEN_H);
     if (!ressources->buffer) {
         allegro_message("Impossible de creer le buffer");
@@ -629,7 +946,8 @@ void dessiner_menu_parametres(const RessourcesJeu *ressources,
         dessiner_option_menu(ressources->buffer, "Demo niveau 2", yBase + pasVertical * 2, selection == 2, 1);
         dessiner_option_menu(ressources->buffer, "Demo niveau 3", yBase + pasVertical * 3, selection == 3, 1);
         dessiner_option_menu(ressources->buffer, "Demo niveau 4", yBase + pasVertical * 4, selection == 4, 1);
-        dessiner_option_menu(ressources->buffer, "Retour", yBase + pasVertical * 5, selection == 5, 1);
+        dessiner_option_menu(ressources->buffer, "Demo niveau 5", yBase + pasVertical * 5, selection == 5, 1);
+        dessiner_option_menu(ressources->buffer, "Retour", yBase + pasVertical * 6, selection == 6, 1);
     } else {
         dessiner_option_menu(ressources->buffer, "Retour", yBase + pasVertical, selection == 1, 1);
     }
@@ -751,24 +1069,7 @@ void dessiner_jeu(const RessourcesJeu *ressources, const EtatJeu *etat) {
     }
 
     dessiner_scene_jeu(ressources->buffer, ressources, etat);
-    textprintf_ex(ressources->buffer,
-                  font,
-                  SCREEN_W / 40,
-                  SCREEN_H / 36,
-                  makecol(255, 255, 255),
-                  -1,
-                  "Niveau %d/%d",
-                  etat->niveau,
-                  etat->niveauMaximum);
-    if (etat->modeFeuActif) {
-        textout_ex(ressources->buffer,
-                   font,
-                   "Pouvoir feu actif",
-                   SCREEN_W / 40,
-                   SCREEN_H / 18,
-                   makecol(255, 120, 60),
-                   -1);
-    }
+    dessiner_panneau_hud(ressources->buffer, etat);
 
     if (etat->perdu) {
         afficher_message_centre(ressources->buffer, SCREEN_W / 7, makecol(255, 0, 0), makecol(255, 0, 0), "PERDU");
@@ -799,9 +1100,14 @@ void liberer_ressources_jeu(RessourcesJeu *ressources) {
     }
 
     liberer_bitmap(&ressources->buffer);
+    for (i = 1; i < NOMBRE_FONDS_NIVEAUX; i++) {
+        liberer_bitmap(&ressources->fondsNiveaux[i]);
+    }
+    ressources->fondsNiveaux[0] = NULL;
     for (i = 0; i < BULLE_TAILLES_TOTAL; i++) {
         liberer_bitmap(&ressources->sprites[i]);
         liberer_bitmap(&ressources->spritesVifDor[i]);
+        liberer_bitmap(&ressources->spritesVolDeMort[i]);
     }
     liberer_bitmap(&ressources->player);
     liberer_bitmap(&ressources->tir);

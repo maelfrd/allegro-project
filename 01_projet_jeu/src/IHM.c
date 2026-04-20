@@ -18,6 +18,7 @@ enum {
     PARAM_DEMO_NIVEAU_2,
     PARAM_DEMO_NIVEAU_3,
     PARAM_DEMO_NIVEAU_4,
+    PARAM_DEMO_NIVEAU_5,
     PARAM_RETOUR
 };
 
@@ -172,6 +173,9 @@ void traiter_ihm_parametres(ActionsIHM *actions, int modeDemonstrationActif) {
                 break;
             case PARAM_DEMO_NIVEAU_4:
                 actions->lancerDemoNiveau = 4;
+                break;
+            case PARAM_DEMO_NIVEAU_5:
+                actions->lancerDemoNiveau = 5;
                 break;
             case PARAM_RETOUR:
                 actions->retourMenu = 1;

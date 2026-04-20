@@ -13,7 +13,8 @@ typedef enum {
 
 typedef enum {
     ENTITE_MANGE_MORT = 0,
-    ENTITE_VIF_DOR
+    ENTITE_VIF_DOR,
+    ENTITE_VOL_DE_MORT
 } TypeEntite;
 
 typedef struct {
@@ -28,6 +29,7 @@ typedef struct {
     float attenuationX;
     int largeur;
     int hauteur;
+    int nombreCoupsAvantDivision;
 } Bulle;
 
 typedef struct {
@@ -86,9 +88,11 @@ typedef struct {
     int explosionW;
     int explosionH;
     int explosionTimer;
-    int modeFeuActif;
+    int auraArdenteActive;
+    int dureeRestanteAuraArdenteMs;
     int perdu;
     int gagne;
+    int score;
     char pseudo[TAILLE_PSEUDO_MAX];
 } EtatJeu;
 

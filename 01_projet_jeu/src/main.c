@@ -5,6 +5,24 @@
 
 #include <stdio.h>
 
+#define LARGEUR_FENETRE_JEU 1536
+#define HAUTEUR_FENETRE_JEU 1024
+#define PROFONDEUR_COULEUR_JEU 32
+#define DUREE_UNE_SECONDE_MS 1000
+#define DUREE_UNE_IMAGE_MS 16
+#define VALEUR_DECOMPTE_DEPART 3
+#define PREMIER_NIVEAU_JEU 1
+
+#define CHEMIN_SAUVEGARDE "savegame.dat"
+#define CHEMIN_FOND_PRINCIPAL "assets/fg.bmp"
+#define CHEMIN_IMAGE_JOUEUR "assets/hary2.bmp"
+#define CHEMIN_IMAGE_MANGE_MORT "assets/mangemort.bmp"
+#define CHEMIN_IMAGE_VIF_DOR "assets/vifdor3.bmp"
+#define CHEMIN_IMAGE_TIR "assets/tir.bmp"
+#define CHEMIN_IMAGE_AURA_ARDENTE "assets/effet feu .bmp"
+#define CHEMIN_IMAGE_CHAPEAU "assets/chapeau.bmp"
+#define CHEMIN_IMAGE_EXPLOSION "assets/explosion.bmp"
+
 typedef enum {
     ECRAN_MENU = 0,
     ECRAN_SAISIE_PSEUDO,
@@ -14,245 +32,402 @@ typedef enum {
     ECRAN_REGLES
 } EcranActif;
 
-static void construire_configuration_jeu(ConfigurationJeu *configuration, const RessourcesJeu *ressources) {
-    int i;
-
-    configuration->largeurFenetre = SCREEN_W;
-    configuration->hauteurFenetre = SCREEN_H;
-    configuration->groundY = SCREEN_H - SCREEN_H / 6;
-    configuration->leftLimit = 0;
-    configuration->rightLimit = SCREEN_W;
-    configuration->vitesseJoueur = SCREEN_W / 640;
-    if (configuration->vitesseJoueur < 1) {
-        configuration->vitesseJoueur = 1;
-    }
-    configuration->joueurLargeur = ressources->player->w;
-    configuration->joueurHauteur = ressources->player->h;
-    configuration->projectileLargeur = SCREEN_W / 160;
-    if (configuration->projectileLargeur < 6) {
-        configuration->projectileLargeur = 6;
-    }
-    configuration->projectileHauteur = SCREEN_H / 36;
-    if (configuration->projectileHauteur < 16) {
-        configuration->projectileHauteur = 16;
-    }
-    configuration->projectileVitesse = SCREEN_H / 90;
-    if (configuration->projectileVitesse < 6) {
-        configuration->projectileVitesse = 6;
-    }
-    configuration->chapeauLargeur = ressources->chapeau->w;
-    configuration->chapeauHauteur = ressources->chapeau->h;
-    configuration->explosionLargeur = ressources->explosion->w;
-    configuration->explosionHauteur = ressources->explosion->h;
-
-    for (i = 0; i < BULLE_TAILLES_TOTAL; i++) {
-        configuration->largeurBulles[i] = ressources->sprites[i]->w;
-        configuration->hauteurBulles[i] = ressources->sprites[i]->h;
-    }
-}
-
-static int fichier_existe(const char *chemin) {
-    FILE *fichier;
-
-    if (!chemin || chemin[0] == '\0') {
-        return 0;
-    }
-
-    fichier = fopen(chemin, "rb");
-    if (!fichier) {
-        return 0;
-    }
-
-    fclose(fichier);
-    return 1;
-}
-
-int main(void) {
+typedef struct {
     RessourcesJeu ressources;
     ConfigurationJeu configuration;
     EtatJeu etat;
     ActionsIHM actions;
     CommandesJeu commandes;
-    EcranActif ecran;
+    EcranActif ecranActuel;
     int repriseDisponible;
     int modeDemonstrationActif;
     int valeurDecompte;
-    int tempsDecompteMs;
+    int tempsRestantDecompteMs;
     char pseudoJoueur[TAILLE_PSEUDO_MAX];
+} ApplicationJeu;
 
-    if (!initialiser_affichage(1280, 720, 32)) {
+static void construire_configuration_jeu(ConfigurationJeu *configuration,
+                                         const RessourcesJeu *ressources);
+static int fichier_existe(const char *cheminFichier);
+static void initialiser_decompte_depart(ApplicationJeu *application);
+static void vider_pseudo_joueur(ApplicationJeu *application);
+static int demarrer_systemes_jeu(ApplicationJeu *application);
+static void fermer_systemes_jeu(ApplicationJeu *application);
+static int lancer_niveau(ApplicationJeu *application, int numeroNiveau);
+static int charger_partie_et_lancer_decompte(ApplicationJeu *application);
+static void traiter_ecran_menu(ApplicationJeu *application);
+static void traiter_ecran_saisie_pseudo(ApplicationJeu *application);
+static void traiter_ecran_decompte(ApplicationJeu *application);
+static void traiter_ecran_parametres(ApplicationJeu *application);
+static void traiter_ecran_regles(ApplicationJeu *application);
+static void traiter_retour_depuis_le_jeu(ApplicationJeu *application);
+static void traiter_ecran_jeu(ApplicationJeu *application);
+
+int main(void) {
+    ApplicationJeu application;
+
+    /* --- initialiser Allegro, les ressources, la logique et la sauvegarde --- */
+    if (!demarrer_systemes_jeu(&application)) {
         return 1;
     }
 
-    if (!charger_ressources_jeu(&ressources,
-                                "assets/test2.bmp",
-                                "assets/hary2.bmp",
-                                "assets/mangemort.bmp",
-                                "assets/vifdor3.bmp",
-                                "assets/tir.bmp",
-                                "assets/effet feu .bmp",
-                                "assets/chapeau.bmp",
-                                "assets/explosion.bmp")) {
-        fermer_affichage();
-        return 1;
-    }
+    while (!application.actions.quitter) {
+        /* --- vérifier si une sauvegarde peut être reprise --- */
+        application.repriseDisponible = fichier_existe(CHEMIN_SAUVEGARDE);
 
-    construire_configuration_jeu(&configuration, &ressources);
-
-    if (!initialiser_logique_jeu(&etat, &configuration)) {
-        liberer_ressources_jeu(&ressources);
-        fermer_affichage();
-        return 1;
-    }
-
-    if (!initialiser_sauvegarde()) {
-        fermer_logique_jeu(&etat);
-        liberer_ressources_jeu(&ressources);
-        fermer_affichage();
-        return 1;
-    }
-
-    initialiser_actions_ihm(&actions);
-    initialiser_commandes_jeu(&commandes);
-    ecran = ECRAN_MENU;
-    modeDemonstrationActif = 0;
-    valeurDecompte = 0;
-    tempsDecompteMs = 0;
-    pseudoJoueur[0] = '\0';
-
-    while (!actions.quitter) {
-        repriseDisponible = fichier_existe("savegame.dat");
-
-        switch (ecran) {
+        /* --- traiter l'écran actuellement affiché --- */
+        switch (application.ecranActuel) {
             case ECRAN_MENU:
-                traiter_ihm_menu(&actions, repriseDisponible);
-
-                if (actions.nouvellePartie) {
-                    pseudoJoueur[0] = '\0';
-                    ecran = ECRAN_SAISIE_PSEUDO;
-                } else if (actions.reprendrePartie) {
-                    if (charger_etat_jeu(&etat, "savegame.dat")) {
-                        valeurDecompte = 3;
-                        tempsDecompteMs = 1000;
-                        ecran = ECRAN_DECOMPTE;
-                    }
-                } else if (actions.ouvrirParametres) {
-                    ecran = ECRAN_PARAMETRES;
-                } else if (actions.ouvrirRegles) {
-                    ecran = ECRAN_REGLES;
-                }
-
-                dessiner_menu_depart(&ressources, actions.menuSelection, repriseDisponible);
+                traiter_ecran_menu(&application);
                 break;
 
             case ECRAN_SAISIE_PSEUDO:
-                traiter_ihm_saisie_pseudo(&actions, pseudoJoueur, TAILLE_PSEUDO_MAX);
-                if (actions.retourMenu) {
-                    ecran = ECRAN_MENU;
-                } else if (actions.valider) {
-                    if (reinitialiser_partie(&etat, &configuration, 1)) {
-                        definir_pseudo_joueur(&etat, pseudoJoueur);
-                        valeurDecompte = 3;
-                        tempsDecompteMs = 1000;
-                        ecran = ECRAN_DECOMPTE;
-                    }
-                }
-                dessiner_saisie_pseudo(&ressources, pseudoJoueur);
+                traiter_ecran_saisie_pseudo(&application);
                 break;
 
             case ECRAN_DECOMPTE:
-                dessiner_decompte_depart(&ressources, &etat, valeurDecompte);
-                tempsDecompteMs -= 16;
-                if (tempsDecompteMs <= 0) {
-                    valeurDecompte--;
-                    if (valeurDecompte <= 0) {
-                        ecran = ECRAN_JEU;
-                    } else {
-                        tempsDecompteMs = 1000;
-                    }
-                }
-                break;
-
-            case ECRAN_PARAMETRES:
-                traiter_ihm_parametres(&actions, modeDemonstrationActif);
-                if (actions.basculerModeDemonstration) {
-                    modeDemonstrationActif = !modeDemonstrationActif;
-                    if (!modeDemonstrationActif && actions.parametresSelection > 1) {
-                        actions.parametresSelection = 0;
-                    }
-                } else if (actions.lancerDemoNiveau > 0 && modeDemonstrationActif) {
-                    if (reinitialiser_partie(&etat, &configuration, actions.lancerDemoNiveau)) {
-                        valeurDecompte = 3;
-                        tempsDecompteMs = 1000;
-                        ecran = ECRAN_DECOMPTE;
-                    }
-                } else if (actions.retourMenu) {
-                    ecran = ECRAN_MENU;
-                }
-                if (ecran != ECRAN_PARAMETRES) {
-                    break;
-                }
-                dessiner_menu_parametres(&ressources,
-                                         actions.parametresSelection,
-                                         modeDemonstrationActif);
-                break;
-
-            case ECRAN_REGLES:
-                traiter_ihm_ecran_secondaire(&actions);
-                if (actions.retourMenu) {
-                    ecran = ECRAN_MENU;
-                }
-                dessiner_ecran_information(&ressources,
-                                           "REGLES",
-                                           "Gauche/Droite pour bouger.",
-                                           "Haut pour tirer sur les bulles.",
-                                           "S pour sauvegarder, L pour charger.");
+                traiter_ecran_decompte(&application);
                 break;
 
             case ECRAN_JEU:
-                traiter_ihm_jeu(&actions, &commandes, etat.perdu || etat.gagne);
+                traiter_ecran_jeu(&application);
+                break;
 
-                if (actions.sauvegarder) {
-                    sauvegarder_etat_jeu(&etat, "savegame.dat");
-                }
+            case ECRAN_PARAMETRES:
+                traiter_ecran_parametres(&application);
+                break;
 
-                if (actions.charger) {
-                    charger_etat_jeu(&etat, "savegame.dat");
-                }
-
-                if (actions.retourMenu) {
-                    if (etat.gagne) {
-                        if (etat.niveau < etat.niveauMaximum) {
-                            if (reinitialiser_partie(&etat, &configuration, etat.niveau + 1)) {
-                                valeurDecompte = 3;
-                                tempsDecompteMs = 1000;
-                                ecran = ECRAN_DECOMPTE;
-                            }
-                        } else {
-                            ecran = ECRAN_MENU;
-                        }
-                    } else {
-                        ecran = ECRAN_MENU;
-                    }
-                    break;
-                }
-
-                if (!actions.quitter) {
-                    mettre_a_jour_logique_jeu(&etat, &configuration, &commandes);
-                }
-
-                dessiner_jeu(&ressources, &etat);
+            case ECRAN_REGLES:
+                traiter_ecran_regles(&application);
                 break;
         }
 
-        rest(16);
+        /* --- limiter la boucle de jeu à un rythme stable --- */
+        rest(DUREE_UNE_IMAGE_MS);
     }
 
-    fermer_sauvegarde();
-    fermer_logique_jeu(&etat);
-    liberer_ressources_jeu(&ressources);
-    fermer_affichage();
+    /* --- libérer proprement les systèmes du jeu --- */
+    fermer_systemes_jeu(&application);
 
     return 0;
 }
 END_OF_MAIN();
+
+static void construire_configuration_jeu(ConfigurationJeu *configuration,
+                                         const RessourcesJeu *ressources) {
+    int indexTailleBulle;
+
+    /* --- calculer les dimensions générales du terrain de jeu --- */
+    configuration->largeurFenetre = SCREEN_W;
+    configuration->hauteurFenetre = SCREEN_H;
+    configuration->groundY = SCREEN_H - SCREEN_H / 6;
+    configuration->leftLimit = 0;
+    configuration->rightLimit = SCREEN_W;
+
+    /* --- adapter la vitesse du joueur à la fenêtre --- */
+    configuration->vitesseJoueur = SCREEN_W / 640;
+    if (configuration->vitesseJoueur < 1) {
+        configuration->vitesseJoueur = 1;
+    }
+
+    /* --- recopier les dimensions des sprites du joueur et des bonus --- */
+    configuration->joueurLargeur = ressources->player->w;
+    configuration->joueurHauteur = ressources->player->h;
+    configuration->chapeauLargeur = ressources->chapeau->w;
+    configuration->chapeauHauteur = ressources->chapeau->h;
+    configuration->explosionLargeur = ressources->explosion->w;
+    configuration->explosionHauteur = ressources->explosion->h;
+
+    /* --- dimensionner le tir en gardant une taille minimale lisible --- */
+    configuration->projectileLargeur = SCREEN_W / 160;
+    if (configuration->projectileLargeur < 6) {
+        configuration->projectileLargeur = 6;
+    }
+
+    configuration->projectileHauteur = SCREEN_H / 36;
+    if (configuration->projectileHauteur < 16) {
+        configuration->projectileHauteur = 16;
+    }
+
+    configuration->projectileVitesse = SCREEN_H / 90;
+    if (configuration->projectileVitesse < 6) {
+        configuration->projectileVitesse = 6;
+    }
+
+    /* --- mémoriser la taille des bulles pour chaque niveau de découpe --- */
+    for (indexTailleBulle = 0; indexTailleBulle < BULLE_TAILLES_TOTAL; indexTailleBulle++) {
+        configuration->largeurBulles[indexTailleBulle] = ressources->sprites[indexTailleBulle]->w;
+        configuration->hauteurBulles[indexTailleBulle] = ressources->sprites[indexTailleBulle]->h;
+    }
+}
+
+static int fichier_existe(const char *cheminFichier) {
+    FILE *fichier;
+
+    /* --- refuser un chemin vide ou nul --- */
+    if (!cheminFichier || cheminFichier[0] == '\0') {
+        return 0;
+    }
+
+    /* --- tenter l'ouverture du fichier en lecture binaire --- */
+    fichier = fopen(cheminFichier, "rb");
+    if (!fichier) {
+        return 0;
+    }
+
+    /* --- fermer le fichier immédiatement après le test --- */
+    fclose(fichier);
+    return 1;
+}
+
+static void initialiser_decompte_depart(ApplicationJeu *application) {
+    /* --- préparer l'écran de décompte avant d'entrer en jeu --- */
+    application->valeurDecompte = VALEUR_DECOMPTE_DEPART;
+    application->tempsRestantDecompteMs = DUREE_UNE_SECONDE_MS;
+    application->ecranActuel = ECRAN_DECOMPTE;
+}
+
+static void vider_pseudo_joueur(ApplicationJeu *application) {
+    /* --- repartir d'un pseudo vide pour une nouvelle partie --- */
+    application->pseudoJoueur[0] = '\0';
+}
+
+static int demarrer_systemes_jeu(ApplicationJeu *application) {
+    /* --- ouvrir la fenêtre Allegro --- */
+    if (!initialiser_affichage(CHEMIN_FOND_PRINCIPAL,
+                               LARGEUR_FENETRE_JEU,
+                               HAUTEUR_FENETRE_JEU,
+                               PROFONDEUR_COULEUR_JEU)) {
+        return 0;
+    }
+
+    /* --- charger tous les bitmaps utilisés par le jeu --- */
+    if (!charger_ressources_jeu(&application->ressources,
+                                CHEMIN_FOND_PRINCIPAL,
+                                CHEMIN_IMAGE_JOUEUR,
+                                CHEMIN_IMAGE_MANGE_MORT,
+                                CHEMIN_IMAGE_VIF_DOR,
+                                CHEMIN_IMAGE_TIR,
+                                CHEMIN_IMAGE_AURA_ARDENTE,
+                                CHEMIN_IMAGE_CHAPEAU,
+                                CHEMIN_IMAGE_EXPLOSION)) {
+        fermer_affichage();
+        return 0;
+    }
+
+    /* --- construire la configuration de jeu à partir des sprites chargés --- */
+    construire_configuration_jeu(&application->configuration, &application->ressources);
+
+    /* --- initialiser l'état logique de la partie --- */
+    if (!initialiser_logique_jeu(&application->etat, &application->configuration)) {
+        liberer_ressources_jeu(&application->ressources);
+        fermer_affichage();
+        return 0;
+    }
+
+    /* --- ouvrir le système de sauvegarde --- */
+    if (!initialiser_sauvegarde()) {
+        fermer_logique_jeu(&application->etat);
+        liberer_ressources_jeu(&application->ressources);
+        fermer_affichage();
+        return 0;
+    }
+
+    /* --- préparer les commandes et l'état global de l'application --- */
+    initialiser_actions_ihm(&application->actions);
+    initialiser_commandes_jeu(&application->commandes);
+    application->ecranActuel = ECRAN_MENU;
+    application->repriseDisponible = 0;
+    application->modeDemonstrationActif = 0;
+    application->valeurDecompte = 0;
+    application->tempsRestantDecompteMs = 0;
+    vider_pseudo_joueur(application);
+
+    return 1;
+}
+
+static void fermer_systemes_jeu(ApplicationJeu *application) {
+    /* --- fermer les sous-systèmes dans l'ordre inverse de l'initialisation --- */
+    fermer_sauvegarde();
+    fermer_logique_jeu(&application->etat);
+    liberer_ressources_jeu(&application->ressources);
+    fermer_affichage();
+}
+
+static int lancer_niveau(ApplicationJeu *application, int numeroNiveau) {
+    /* --- réinitialiser la partie sur le niveau demandé --- */
+    if (!reinitialiser_partie(&application->etat, &application->configuration, numeroNiveau)) {
+        return 0;
+    }
+
+    /* --- afficher ensuite le décompte de départ --- */
+    initialiser_decompte_depart(application);
+    return 1;
+}
+
+static int charger_partie_et_lancer_decompte(ApplicationJeu *application) {
+    /* --- charger la sauvegarde depuis le disque --- */
+    if (!charger_etat_jeu(&application->etat, CHEMIN_SAUVEGARDE)) {
+        return 0;
+    }
+
+    /* --- relancer un décompte avant de rendre la main au joueur --- */
+    initialiser_decompte_depart(application);
+    return 1;
+}
+
+static void traiter_ecran_menu(ApplicationJeu *application) {
+    /* --- lire les actions du menu principal --- */
+    traiter_ihm_menu(&application->actions, application->repriseDisponible);
+
+    /* --- appliquer le choix du joueur dans le menu --- */
+    if (application->actions.nouvellePartie) {
+        vider_pseudo_joueur(application);
+        application->ecranActuel = ECRAN_SAISIE_PSEUDO;
+    } else if (application->actions.reprendrePartie) {
+        charger_partie_et_lancer_decompte(application);
+    } else if (application->actions.ouvrirParametres) {
+        application->ecranActuel = ECRAN_PARAMETRES;
+    } else if (application->actions.ouvrirRegles) {
+        application->ecranActuel = ECRAN_REGLES;
+    }
+
+    /* --- dessiner le menu principal --- */
+    dessiner_menu_depart(&application->ressources,
+                         application->actions.menuSelection,
+                         application->repriseDisponible);
+}
+
+static void traiter_ecran_saisie_pseudo(ApplicationJeu *application) {
+    /* --- récupérer la saisie clavier du pseudo --- */
+    traiter_ihm_saisie_pseudo(&application->actions,
+                              application->pseudoJoueur,
+                              TAILLE_PSEUDO_MAX);
+
+    /* --- valider le pseudo ou revenir au menu --- */
+    if (application->actions.retourMenu) {
+        application->ecranActuel = ECRAN_MENU;
+    } else if (application->actions.valider) {
+        if (lancer_niveau(application, PREMIER_NIVEAU_JEU)) {
+            definir_pseudo_joueur(&application->etat, application->pseudoJoueur);
+        }
+    }
+
+    /* --- dessiner l'écran de saisie du pseudo --- */
+    dessiner_saisie_pseudo(&application->ressources, application->pseudoJoueur);
+}
+
+static void traiter_ecran_decompte(ApplicationJeu *application) {
+    /* --- afficher le chiffre courant du décompte --- */
+    dessiner_decompte_depart(&application->ressources,
+                             &application->etat,
+                             application->valeurDecompte);
+
+    /* --- faire avancer le décompte image par image --- */
+    application->tempsRestantDecompteMs -= DUREE_UNE_IMAGE_MS;
+    if (application->tempsRestantDecompteMs > 0) {
+        return;
+    }
+
+    /* --- passer au chiffre suivant ou démarrer le jeu --- */
+    application->valeurDecompte--;
+    if (application->valeurDecompte <= 0) {
+        application->ecranActuel = ECRAN_JEU;
+    } else {
+        application->tempsRestantDecompteMs = DUREE_UNE_SECONDE_MS;
+    }
+}
+
+static void traiter_ecran_parametres(ApplicationJeu *application) {
+    /* --- lire les actions de l'écran des paramètres --- */
+    traiter_ihm_parametres(&application->actions, application->modeDemonstrationActif);
+
+    /* --- activer ou désactiver le mode démonstration --- */
+    if (application->actions.basculerModeDemonstration) {
+        application->modeDemonstrationActif = !application->modeDemonstrationActif;
+        if (!application->modeDemonstrationActif && application->actions.parametresSelection > 1) {
+            application->actions.parametresSelection = 0;
+        }
+    } else if (application->actions.lancerDemoNiveau > 0 && application->modeDemonstrationActif) {
+        lancer_niveau(application, application->actions.lancerDemoNiveau);
+    } else if (application->actions.retourMenu) {
+        application->ecranActuel = ECRAN_MENU;
+    }
+
+    /* --- ne rien dessiner si l'écran a changé pendant ce traitement --- */
+    if (application->ecranActuel != ECRAN_PARAMETRES) {
+        return;
+    }
+
+    /* --- dessiner le menu des paramètres --- */
+    dessiner_menu_parametres(&application->ressources,
+                             application->actions.parametresSelection,
+                             application->modeDemonstrationActif);
+}
+
+static void traiter_ecran_regles(ApplicationJeu *application) {
+    /* --- lire la demande de retour depuis l'écran de règles --- */
+    traiter_ihm_ecran_secondaire(&application->actions);
+    if (application->actions.retourMenu) {
+        application->ecranActuel = ECRAN_MENU;
+    }
+
+    /* --- dessiner les règles du jeu --- */
+    dessiner_ecran_information(&application->ressources,
+                               "REGLES",
+                               "Gauche/Droite pour bouger.",
+                               "Haut pour tirer sur les bulles.",
+                               "S pour sauvegarder, L pour charger.");
+}
+
+static void traiter_retour_depuis_le_jeu(ApplicationJeu *application) {
+    /* --- passer au niveau suivant si le joueur a gagné --- */
+    if (application->etat.gagne) {
+        if (application->etat.niveau < application->etat.niveauMaximum) {
+            lancer_niveau(application, application->etat.niveau + 1);
+        } else {
+            application->ecranActuel = ECRAN_MENU;
+        }
+        return;
+    }
+
+    /* --- revenir au menu dans tous les autres cas --- */
+    application->ecranActuel = ECRAN_MENU;
+}
+
+static void traiter_ecran_jeu(ApplicationJeu *application) {
+    /* --- lire les commandes de jeu et geler les entrées si la partie est finie --- */
+    traiter_ihm_jeu(&application->actions,
+                    &application->commandes,
+                    application->etat.perdu || application->etat.gagne);
+
+    /* --- sauvegarder ou charger la partie à la demande --- */
+    if (application->actions.sauvegarder) {
+        sauvegarder_etat_jeu(&application->etat, CHEMIN_SAUVEGARDE);
+    }
+
+    if (application->actions.charger) {
+        charger_partie_et_lancer_decompte(application);
+    }
+
+    /* --- laisser le décompte reprendre immédiatement après un chargement --- */
+    if (application->ecranActuel != ECRAN_JEU) {
+        return;
+    }
+
+    /* --- gérer le retour au menu ou le passage au niveau suivant --- */
+    if (application->actions.retourMenu) {
+        traiter_retour_depuis_le_jeu(application);
+        return;
+    }
+
+    /* --- mettre à jour la logique tant que le joueur ne quitte pas --- */
+    if (!application->actions.quitter) {
+        mettre_a_jour_logique_jeu(&application->etat,
+                                  &application->configuration,
+                                  &application->commandes);
+    }
+
+    /* --- dessiner la scène de jeu complète --- */
+    dessiner_jeu(&application->ressources, &application->etat);
+}

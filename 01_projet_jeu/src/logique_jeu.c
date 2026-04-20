@@ -3,12 +3,50 @@
 #include <stdlib.h>
 #include <string.h>
 
-static int collision_rect(float x1, float y1, int w1, int h1,
-                          float x2, float y2, int w2, int h2) {
-    return (x1 < x2 + w2 &&
-            x1 + w1 > x2 &&
-            y1 < y2 + h2 &&
-            y1 + h1 > y2);
+#define DUREE_AURA_ARDENTE_MS 5000
+#define NOMBRE_COUPS_AVANT_DIVISION_VOL_DE_MORT 5
+
+static int calculer_score_bulle(const Bulle *bulle) {
+    int score;
+
+    if (!bulle) {
+        return 0;
+    }
+
+    switch (bulle->taille) {
+        case BULLE_TRES_GRANDE:
+            score = 40;
+            break;
+        case BULLE_GRANDE:
+            score = 70;
+            break;
+        case BULLE_MOYENNE:
+            score = 110;
+            break;
+        case BULLE_PETITE:
+            score = 160;
+            break;
+        case BULLE_TAILLES_TOTAL:
+            score = 0;
+            break;
+    }
+
+    if (bulle->type == ENTITE_VIF_DOR) {
+        score += 140;
+    }
+    if (bulle->type == ENTITE_VOL_DE_MORT) {
+        score += 220;
+    }
+
+    return score;
+}
+
+static int rectangles_en_collision(float x1, float y1, int largeurRectangle1, int hauteurRectangle1,
+                                   float x2, float y2, int largeurRectangle2, int hauteurRectangle2) {
+    return (x1 < x2 + largeurRectangle2 &&
+            x1 + largeurRectangle1 > x2 &&
+            y1 < y2 + hauteurRectangle2 &&
+            y1 + hauteurRectangle1 > y2);
 }
 
 static void copier_configuration_dans_etat(EtatJeu *etat, const ConfigurationJeu *configuration) {
@@ -30,6 +68,7 @@ static void configurer_bulle(Bulle *bulle, TailleBulle taille, const Configurati
     bulle->taille = taille;
     bulle->largeur = configuration->largeurBulles[(int) taille];
     bulle->hauteur = configuration->hauteurBulles[(int) taille];
+    bulle->nombreCoupsAvantDivision = 0;
 
     switch (taille) {
         case BULLE_TRES_GRANDE:
@@ -57,24 +96,24 @@ static void configurer_bulle(Bulle *bulle, TailleBulle taille, const Configurati
     }
 }
 
-static int reserver_bulles(EtatJeu *etat, int nouvelleCapacite) {
-    Bulle *nouvellesBulles;
+static int assurer_capacite_bulles(EtatJeu *etat, int nouvelleCapacite) {
+    Bulle *nouveauTableauBulles;
 
     if (nouvelleCapacite <= etat->capaciteBulles) {
         return 1;
     }
 
-    nouvellesBulles = (Bulle *) realloc(etat->bulles, (size_t) nouvelleCapacite * sizeof(Bulle));
-    if (!nouvellesBulles) {
+    nouveauTableauBulles = (Bulle *) realloc(etat->bulles, (size_t) nouvelleCapacite * sizeof(Bulle));
+    if (!nouveauTableauBulles) {
         return 0;
     }
 
-    etat->bulles = nouvellesBulles;
+    etat->bulles = nouveauTableauBulles;
     etat->capaciteBulles = nouvelleCapacite;
     return 1;
 }
 
-static float vitesse_horizontale_fille(TailleBulle taille) {
+static float calculer_vitesse_horizontale_bulle_enfant(TailleBulle taille) {
     switch (taille) {
         case BULLE_TRES_GRANDE:
             return 0.18f;
@@ -108,7 +147,7 @@ static int ajouter_bulle(EtatJeu *etat,
     if (etat->nbBulles >= etat->capaciteBulles) {
         int nouvelleCapacite = etat->capaciteBulles == 0 ? 4 : etat->capaciteBulles * 2;
 
-        if (!reserver_bulles(etat, nouvelleCapacite)) {
+        if (!assurer_capacite_bulles(etat, nouvelleCapacite)) {
             return 0;
         }
     }
@@ -148,6 +187,15 @@ static void faire_apparaitre_chapeau(EtatJeu *etat, const Bulle *source) {
     etat->chapeauVy = -2.8f;
 }
 
+static void configurer_vol_de_mort(Bulle *bulle) {
+    if (!bulle) {
+        return;
+    }
+
+    bulle->type = ENTITE_VOL_DE_MORT;
+    bulle->nombreCoupsAvantDivision = NOMBRE_COUPS_AVANT_DIVISION_VOL_DE_MORT;
+}
+
 static void declencher_explosion(EtatJeu *etat, const Bulle *source) {
     if (!etat || !source) {
         return;
@@ -161,12 +209,14 @@ static void declencher_explosion(EtatJeu *etat, const Bulle *source) {
 
 static void separer_bulle(EtatJeu *etat, const ConfigurationJeu *configuration, int index) {
     Bulle source;
-    TailleBulle nouvelleTaille;
-    float centreX;
-    float centreY;
-    float vxFille;
-    int largeurFille;
-    int hauteurFille;
+    TailleBulle tailleBulleEnfant;
+    float centreBulleX;
+    float centreBulleY;
+    float vitesseHorizontaleBulleEnfant;
+    int largeurBulleEnfant;
+    int hauteurBulleEnfant;
+    int indexNouvelleBulleGauche;
+    int indexNouvelleBulleDroite;
 
     if (!etat || !configuration || index < 0 || index >= etat->nbBulles) {
         return;
@@ -181,30 +231,61 @@ static void separer_bulle(EtatJeu *etat, const ConfigurationJeu *configuration, 
         return;
     }
 
-    nouvelleTaille = (TailleBulle) (source.taille + 1);
-    largeurFille = configuration->largeurBulles[(int) nouvelleTaille];
-    hauteurFille = configuration->hauteurBulles[(int) nouvelleTaille];
-    centreX = source.x + source.largeur / 2.0f;
-    centreY = source.y + source.hauteur / 2.0f;
-    vxFille = vitesse_horizontale_fille(nouvelleTaille);
+    tailleBulleEnfant = (TailleBulle) (source.taille + 1);
+    largeurBulleEnfant = configuration->largeurBulles[(int) tailleBulleEnfant];
+    hauteurBulleEnfant = configuration->hauteurBulles[(int) tailleBulleEnfant];
+    centreBulleX = source.x + source.largeur / 2.0f;
+    centreBulleY = source.y + source.hauteur / 2.0f;
+    vitesseHorizontaleBulleEnfant = calculer_vitesse_horizontale_bulle_enfant(tailleBulleEnfant);
 
     supprimer_bulle(etat, index);
     ajouter_bulle(etat,
                   configuration,
                   source.type,
-                  centreX - largeurFille / 2.0f - largeurFille * 0.15f,
-                  centreY - hauteurFille / 2.0f,
-                  -vxFille,
+                  centreBulleX - largeurBulleEnfant / 2.0f - largeurBulleEnfant * 0.15f,
+                  centreBulleY - hauteurBulleEnfant / 2.0f,
+                  -vitesseHorizontaleBulleEnfant,
                   0.0f,
-                  nouvelleTaille);
+                  tailleBulleEnfant);
+    indexNouvelleBulleGauche = etat->nbBulles - 1;
+
     ajouter_bulle(etat,
                   configuration,
                   source.type,
-                  centreX - largeurFille / 2.0f + largeurFille * 0.15f,
-                  centreY - hauteurFille / 2.0f,
-                  vxFille,
+                  centreBulleX - largeurBulleEnfant / 2.0f + largeurBulleEnfant * 0.15f,
+                  centreBulleY - hauteurBulleEnfant / 2.0f,
+                  vitesseHorizontaleBulleEnfant,
                   0.0f,
-                  nouvelleTaille);
+                  tailleBulleEnfant);
+    indexNouvelleBulleDroite = etat->nbBulles - 1;
+
+    if (source.type == ENTITE_VOL_DE_MORT) {
+        etat->bulles[indexNouvelleBulleGauche].nombreCoupsAvantDivision = 0;
+        etat->bulles[indexNouvelleBulleDroite].nombreCoupsAvantDivision = 0;
+    }
+}
+
+static void faire_lacher_bulle_mange_mort_moyenne(EtatJeu *etat,
+                                                  const ConfigurationJeu *configuration,
+                                                  const Bulle *source) {
+    float centreBulleX;
+    float vitesseHorizontale;
+
+    if (!etat || !configuration || !source) {
+        return;
+    }
+
+    centreBulleX = source->x + source->largeur / 2.0f;
+    vitesseHorizontale = source->vx >= 0.0f ? -0.35f : 0.35f;
+
+    ajouter_bulle(etat,
+                  configuration,
+                  ENTITE_MANGE_MORT,
+                  centreBulleX - configuration->largeurBulles[BULLE_MOYENNE] / 2.0f,
+                  source->y + source->hauteur / 3.0f,
+                  vitesseHorizontale,
+                  -2.4f,
+                  BULLE_MOYENNE);
 }
 
 static void update_bulle(Bulle *bulle, const EtatJeu *etat) {
@@ -251,14 +332,14 @@ static int collision_projectile_bulles(const EtatJeu *etat) {
     int i;
 
     for (i = 0; i < etat->nbBulles; i++) {
-        if (collision_rect((float) etat->projectileX,
-                           (float) etat->projectileY,
-                           etat->projectileW,
-                           etat->projectileH,
-                           etat->bulles[i].x,
-                           etat->bulles[i].y,
-                           etat->bulles[i].largeur,
-                           etat->bulles[i].hauteur)) {
+        if (rectangles_en_collision((float) etat->projectileX,
+                                    (float) etat->projectileY,
+                                    etat->projectileW,
+                                    etat->projectileH,
+                                    etat->bulles[i].x,
+                                    etat->bulles[i].y,
+                                    etat->bulles[i].largeur,
+                                    etat->bulles[i].hauteur)) {
             return i;
         }
     }
@@ -266,18 +347,70 @@ static int collision_projectile_bulles(const EtatJeu *etat) {
     return -1;
 }
 
+static int aura_ardente_touche_bulle(const EtatJeu *etat,
+                                     const ConfigurationJeu *configuration,
+                                     const Bulle *bulle) {
+    int margeAuraX;
+    int margeAuraY;
+
+    if (!etat || !configuration || !bulle) {
+        return 0;
+    }
+
+    margeAuraX = configuration->joueurLargeur / 5;
+    margeAuraY = configuration->joueurHauteur / 5;
+    if (margeAuraX < 12) {
+        margeAuraX = 12;
+    }
+    if (margeAuraY < 12) {
+        margeAuraY = 12;
+    }
+
+    return rectangles_en_collision((float) (etat->x - margeAuraX),
+                                   (float) (etat->y - margeAuraY),
+                                   configuration->joueurLargeur + margeAuraX * 2,
+                                   configuration->joueurHauteur + margeAuraY * 2,
+                                   bulle->x,
+                                   bulle->y,
+                                   bulle->largeur,
+                                   bulle->hauteur);
+}
+
+static void gerer_coup_recu_par_bulle(EtatJeu *etat,
+                                      const ConfigurationJeu *configuration,
+                                      int indexBulleTouchee) {
+    Bulle bulleTouchee;
+
+    if (!etat || !configuration || indexBulleTouchee < 0 || indexBulleTouchee >= etat->nbBulles) {
+        return;
+    }
+
+    bulleTouchee = etat->bulles[indexBulleTouchee];
+    declencher_explosion(etat, &bulleTouchee);
+
+    if (bulleTouchee.type == ENTITE_VOL_DE_MORT && bulleTouchee.nombreCoupsAvantDivision > 0) {
+        etat->bulles[indexBulleTouchee].nombreCoupsAvantDivision--;
+        etat->score += 120;
+        faire_lacher_bulle_mange_mort_moyenne(etat, configuration, &bulleTouchee);
+        return;
+    }
+
+    etat->score += calculer_score_bulle(&bulleTouchee);
+    separer_bulle(etat, configuration, indexBulleTouchee);
+}
+
 static int joueur_touche(const EtatJeu *etat, const ConfigurationJeu *configuration) {
     int i;
 
     for (i = 0; i < etat->nbBulles; i++) {
-        if (collision_rect((float) etat->x,
-                           (float) etat->y,
-                           configuration->joueurLargeur,
-                           configuration->joueurHauteur,
-                           etat->bulles[i].x,
-                           etat->bulles[i].y,
-                           etat->bulles[i].largeur,
-                           etat->bulles[i].hauteur)) {
+        if (rectangles_en_collision((float) etat->x,
+                                    (float) etat->y,
+                                    configuration->joueurLargeur,
+                                    configuration->joueurHauteur,
+                                    etat->bulles[i].x,
+                                    etat->bulles[i].y,
+                                    etat->bulles[i].largeur,
+                                    etat->bulles[i].hauteur)) {
             return 1;
         }
     }
@@ -290,14 +423,14 @@ static int joueur_touche_chapeau(const EtatJeu *etat, const ConfigurationJeu *co
         return 0;
     }
 
-    return collision_rect((float) etat->x,
-                          (float) etat->y,
-                          configuration->joueurLargeur,
-                          configuration->joueurHauteur,
-                          (float) etat->chapeauX,
-                          (float) etat->chapeauY,
-                          etat->chapeauW,
-                          etat->chapeauH);
+    return rectangles_en_collision((float) etat->x,
+                                   (float) etat->y,
+                                   configuration->joueurLargeur,
+                                   configuration->joueurHauteur,
+                                   (float) etat->chapeauX,
+                                   (float) etat->chapeauY,
+                                   etat->chapeauW,
+                                   etat->chapeauH);
 }
 
 static void mettre_a_jour_chapeau(EtatJeu *etat) {
@@ -413,6 +546,20 @@ static int charger_niveau(EtatJeu *etat, const ConfigurationJeu *configuration, 
                                  0.36f,
                                  0.0f,
                                  BULLE_MOYENNE);
+        case 5:
+            if (!ajouter_bulle(etat,
+                               configuration,
+                               ENTITE_VOL_DE_MORT,
+                               largeur * 0.50f - configuration->largeurBulles[BULLE_TRES_GRANDE] / 2.0f,
+                               hauteur * 0.10f,
+                               0.28f,
+                               0.0f,
+                               BULLE_TRES_GRANDE)) {
+                return 0;
+            }
+
+            configurer_vol_de_mort(&etat->bulles[etat->nbBulles - 1]);
+            return 1;
         default:
             return 0;
     }
@@ -428,9 +575,11 @@ int initialiser_logique_jeu(EtatJeu *etat, const ConfigurationJeu *configuration
     etat->capaciteBulles = 0;
     etat->nbBulles = 0;
     etat->niveau = 1;
-    etat->niveauMaximum = 4;
+    etat->niveauMaximum = 5;
+    etat->score = 0;
+    etat->dureeRestanteAuraArdenteMs = 0;
 
-    if (!reserver_bulles(etat, 4)) {
+    if (!assurer_capacite_bulles(etat, 4)) {
         return 0;
     }
 
@@ -467,7 +616,8 @@ int reinitialiser_partie(EtatJeu *etat, const ConfigurationJeu *configuration, i
     etat->explosionX = 0;
     etat->explosionY = 0;
     etat->explosionTimer = 0;
-    etat->modeFeuActif = 0;
+    etat->auraArdenteActive = 0;
+    etat->dureeRestanteAuraArdenteMs = 0;
     etat->perdu = 0;
     etat->gagne = 0;
 
@@ -500,7 +650,8 @@ void initialiser_commandes_jeu(CommandesJeu *commandes) {
 void mettre_a_jour_logique_jeu(EtatJeu *etat,
                                const ConfigurationJeu *configuration,
                                const CommandesJeu *commandes) {
-    int idxTouchee;
+    int indexBulleTouchee;
+    int indexBulle;
 
     if (!etat || !configuration || !commandes || etat->perdu || etat->gagne) {
         return;
@@ -532,17 +683,10 @@ void mettre_a_jour_logique_jeu(EtatJeu *etat,
     mettre_a_jour_chapeau(etat);
 
     if (etat->projectileActive) {
-        idxTouchee = collision_projectile_bulles(etat);
-        if (idxTouchee != -1) {
-            Bulle touchee = etat->bulles[idxTouchee];
-
+        indexBulleTouchee = collision_projectile_bulles(etat);
+        if (indexBulleTouchee != -1) {
             etat->projectileActive = 0;
-            declencher_explosion(etat, &touchee);
-            if (etat->modeFeuActif) {
-                supprimer_bulle(etat, idxTouchee);
-            } else {
-                separer_bulle(etat, configuration, idxTouchee);
-            }
+            gerer_coup_recu_par_bulle(etat, configuration, indexBulleTouchee);
         }
     }
 
@@ -557,7 +701,24 @@ void mettre_a_jour_logique_jeu(EtatJeu *etat,
         etat->chapeauVisible = 0;
         etat->chapeauVx = 0.0f;
         etat->chapeauVy = 0.0f;
-        etat->modeFeuActif = 1;
+        etat->auraArdenteActive = 1;
+        etat->dureeRestanteAuraArdenteMs = DUREE_AURA_ARDENTE_MS;
+        etat->score += 250;
+    }
+
+    if (etat->auraArdenteActive) {
+        /* L'aura détruit toute bulle qui s'approche trop près du joueur. */
+        for (indexBulle = etat->nbBulles - 1; indexBulle >= 0; indexBulle--) {
+            if (aura_ardente_touche_bulle(etat, configuration, &etat->bulles[indexBulle])) {
+                gerer_coup_recu_par_bulle(etat, configuration, indexBulle);
+            }
+        }
+
+        etat->dureeRestanteAuraArdenteMs -= 16;
+        if (etat->dureeRestanteAuraArdenteMs <= 0) {
+            etat->dureeRestanteAuraArdenteMs = 0;
+            etat->auraArdenteActive = 0;
+        }
     }
 
     if (joueur_touche(etat, configuration)) {
