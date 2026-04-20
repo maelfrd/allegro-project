@@ -12,6 +12,14 @@
 #define DUREE_UNE_IMAGE_MS 16
 #define VALEUR_DECOMPTE_DEPART 3
 #define PREMIER_NIVEAU_JEU 1
+#define DIVISEUR_HAUTEUR_SOL 6
+#define DIVISEUR_VITESSE_JOUEUR 640
+#define DIVISEUR_LARGEUR_PROJECTILE 160
+#define LARGEUR_MIN_PROJECTILE 6
+#define DIVISEUR_HAUTEUR_PROJECTILE 36
+#define HAUTEUR_MIN_PROJECTILE 16
+#define DIVISEUR_VITESSE_PROJECTILE 90
+#define VITESSE_MIN_PROJECTILE 6
 
 #define CHEMIN_SAUVEGARDE "savegame.dat"
 #define CHEMIN_FOND_PRINCIPAL "assets/fg.bmp"
@@ -118,14 +126,14 @@ static void construire_configuration_jeu(ConfigurationJeu *configuration,
     int indexTailleBulle;
 
     /* --- calculer les dimensions générales du terrain de jeu --- */
-    configuration->largeurFenetre = SCREEN_W;
-    configuration->hauteurFenetre = SCREEN_H;
-    configuration->groundY = SCREEN_H - SCREEN_H / 6;
+    configuration->largeurFenetre = LARGEUR_FENETRE_JEU;
+    configuration->hauteurFenetre = HAUTEUR_FENETRE_JEU;
+    configuration->groundY = HAUTEUR_FENETRE_JEU - HAUTEUR_FENETRE_JEU / DIVISEUR_HAUTEUR_SOL;
     configuration->leftLimit = 0;
-    configuration->rightLimit = SCREEN_W;
+    configuration->rightLimit = LARGEUR_FENETRE_JEU;
 
     /* --- adapter la vitesse du joueur à la fenêtre --- */
-    configuration->vitesseJoueur = SCREEN_W / 640;
+    configuration->vitesseJoueur = LARGEUR_FENETRE_JEU / DIVISEUR_VITESSE_JOUEUR;
     if (configuration->vitesseJoueur < 1) {
         configuration->vitesseJoueur = 1;
     }
@@ -139,19 +147,19 @@ static void construire_configuration_jeu(ConfigurationJeu *configuration,
     configuration->explosionHauteur = ressources->explosion->h;
 
     /* --- dimensionner le tir en gardant une taille minimale lisible --- */
-    configuration->projectileLargeur = SCREEN_W / 160;
-    if (configuration->projectileLargeur < 6) {
-        configuration->projectileLargeur = 6;
+    configuration->projectileLargeur = LARGEUR_FENETRE_JEU / DIVISEUR_LARGEUR_PROJECTILE;
+    if (configuration->projectileLargeur < LARGEUR_MIN_PROJECTILE) {
+        configuration->projectileLargeur = LARGEUR_MIN_PROJECTILE;
     }
 
-    configuration->projectileHauteur = SCREEN_H / 36;
-    if (configuration->projectileHauteur < 16) {
-        configuration->projectileHauteur = 16;
+    configuration->projectileHauteur = HAUTEUR_FENETRE_JEU / DIVISEUR_HAUTEUR_PROJECTILE;
+    if (configuration->projectileHauteur < HAUTEUR_MIN_PROJECTILE) {
+        configuration->projectileHauteur = HAUTEUR_MIN_PROJECTILE;
     }
 
-    configuration->projectileVitesse = SCREEN_H / 90;
-    if (configuration->projectileVitesse < 6) {
-        configuration->projectileVitesse = 6;
+    configuration->projectileVitesse = HAUTEUR_FENETRE_JEU / DIVISEUR_VITESSE_PROJECTILE;
+    if (configuration->projectileVitesse < VITESSE_MIN_PROJECTILE) {
+        configuration->projectileVitesse = VITESSE_MIN_PROJECTILE;
     }
 
     /* --- mémoriser la taille des bulles pour chaque niveau de découpe --- */

@@ -288,7 +288,7 @@ static void faire_lacher_bulle_mange_mort_moyenne(EtatJeu *etat,
                   BULLE_MOYENNE);
 }
 
-static void update_bulle(Bulle *bulle, const EtatJeu *etat) {
+static void mettre_a_jour_bulle(Bulle *bulle, const EtatJeu *etat) {
     if (!bulle || !etat) {
         return;
     }
@@ -320,15 +320,15 @@ static void update_bulle(Bulle *bulle, const EtatJeu *etat) {
     }
 }
 
-static void update_bulles(EtatJeu *etat) {
+static void mettre_a_jour_toutes_les_bulles(EtatJeu *etat) {
     int i;
 
     for (i = 0; i < etat->nbBulles; i++) {
-        update_bulle(&etat->bulles[i], etat);
+        mettre_a_jour_bulle(&etat->bulles[i], etat);
     }
 }
 
-static int collision_projectile_bulles(const EtatJeu *etat) {
+static int trouver_bulle_touchee_par_projectile(const EtatJeu *etat) {
     int i;
 
     for (i = 0; i < etat->nbBulles; i++) {
@@ -679,11 +679,11 @@ void mettre_a_jour_logique_jeu(EtatJeu *etat,
         }
     }
 
-    update_bulles(etat);
+    mettre_a_jour_toutes_les_bulles(etat);
     mettre_a_jour_chapeau(etat);
 
     if (etat->projectileActive) {
-        indexBulleTouchee = collision_projectile_bulles(etat);
+        indexBulleTouchee = trouver_bulle_touchee_par_projectile(etat);
         if (indexBulleTouchee != -1) {
             etat->projectileActive = 0;
             gerer_coup_recu_par_bulle(etat, configuration, indexBulleTouchee);

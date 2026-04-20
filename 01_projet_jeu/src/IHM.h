@@ -17,14 +17,14 @@ typedef struct {
     int parametresSelection;
     int basculerModeDemonstration;
     int lancerDemoNiveau;
-    int oldMenuUpState;
-    int oldMenuDownState;
-    int oldMenuEnterState;
-    int oldGameEnterState;
-    int oldBackState;
-    int oldSaveState;
-    int oldLoadState;
-    int oldShootState;
+    int toucheHautMenuPrecedente;
+    int toucheBasMenuPrecedente;
+    int toucheEntreeMenuPrecedente;
+    int toucheEntreeJeuPrecedente;
+    int toucheRetourPrecedente;
+    int toucheSauvegardePrecedente;
+    int toucheChargementPrecedente;
+    int toucheTirPrecedente;
 } ActionsIHM;
 
 void initialiser_actions_ihm(ActionsIHM *actions);

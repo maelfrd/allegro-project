@@ -11,6 +11,22 @@ enum {
     MENU_REGLES
 };
 
+static int obtenir_largeur_zone_dessin(const BITMAP *bitmap) {
+    return bitmap ? bitmap->w : 0;
+}
+
+static int obtenir_hauteur_zone_dessin(const BITMAP *bitmap) {
+    return bitmap ? bitmap->h : 0;
+}
+
+static void afficher_buffer_a_l_ecran(BITMAP *buffer) {
+    if (!buffer || !screen) {
+        return;
+    }
+
+    blit(buffer, screen, 0, 0, 0, 0, buffer->w, buffer->h);
+}
+
 static void initialiser_ressources_vides(RessourcesJeu *ressources) {
     int i;
 
@@ -36,8 +52,10 @@ static void dessiner_boite_centrale(BITMAP *buffer,
                                     int demiHauteur,
                                     int couleurFond,
                                     int couleurContour) {
-    int centreX = SCREEN_W / 2;
-    int centreY = SCREEN_H / 2;
+    int largeurZoneDessin = obtenir_largeur_zone_dessin(buffer);
+    int hauteurZoneDessin = obtenir_hauteur_zone_dessin(buffer);
+    int centreX = largeurZoneDessin / 2;
+    int centreY = hauteurZoneDessin / 2;
 
     rectfill(buffer,
              centreX - demiLargeur,
@@ -58,17 +76,20 @@ static void afficher_message_centre(BITMAP *buffer,
                                     int couleurBord,
                                     int couleurTexte,
                                     const char *message) {
+    int largeurZoneDessin = obtenir_largeur_zone_dessin(buffer);
+    int hauteurZoneDessin = obtenir_hauteur_zone_dessin(buffer);
+
     dessiner_boite_centrale(buffer,
                             demiLargeur,
-                            SCREEN_H / 14,
+                            hauteurZoneDessin / 14,
                             makecol(0, 0, 0),
                             couleurBord);
 
     textout_centre_ex(buffer,
                       font,
                       message,
-                      SCREEN_W / 2,
-                      SCREEN_H / 2 - text_height(font) / 2,
+                      largeurZoneDessin / 2,
+                      hauteurZoneDessin / 2 - text_height(font) / 2,
                       couleurTexte,
                       -1);
 }
@@ -87,6 +108,8 @@ static BITMAP *obtenir_fond_niveau(const RessourcesJeu *ressources, int niveau) 
 
 static void dessiner_fond_scene(BITMAP *buffer, const RessourcesJeu *ressources) {
     BITMAP *fond = obtenir_fond_niveau(ressources, 1);
+    int largeurZoneDessin = obtenir_largeur_zone_dessin(buffer);
+    int hauteurZoneDessin = obtenir_hauteur_zone_dessin(buffer);
 
     clear_to_color(buffer, makecol(0, 0, 0));
 
@@ -99,22 +122,25 @@ static void dessiner_fond_scene(BITMAP *buffer, const RessourcesJeu *ressources)
                      fond->h,
                      0,
                      0,
-                     SCREEN_W,
-                     SCREEN_H);
+                     largeurZoneDessin,
+                     hauteurZoneDessin);
     }
 }
 
 static void dessiner_panneau_menu(BITMAP *buffer, int demiLargeur, int demiHauteur) {
+    int largeurZoneDessin = obtenir_largeur_zone_dessin(buffer);
+    int hauteurZoneDessin = obtenir_hauteur_zone_dessin(buffer);
+
     dessiner_boite_centrale(buffer,
                             demiLargeur,
                             demiHauteur,
                             makecol(10, 10, 10),
                             makecol(170, 170, 170));
     rect(buffer,
-         SCREEN_W / 2 - demiLargeur + 4,
-         SCREEN_H / 2 - demiHauteur + 4,
-         SCREEN_W / 2 + demiLargeur - 4,
-         SCREEN_H / 2 + demiHauteur - 4,
+         largeurZoneDessin / 2 - demiLargeur + 4,
+         hauteurZoneDessin / 2 - demiHauteur + 4,
+         largeurZoneDessin / 2 + demiLargeur - 4,
+         hauteurZoneDessin / 2 + demiHauteur - 4,
          makecol(60, 60, 60));
 }
 
@@ -126,6 +152,8 @@ static void dessiner_texte_centre_aggrandi(BITMAP *buffer,
                                            int couleurFond,
                                            int facteur) {
     BITMAP *texteBitmap;
+    int largeurZoneDessin = obtenir_largeur_zone_dessin(buffer);
+    int hauteurZoneDessin = obtenir_hauteur_zone_dessin(buffer);
     int largeurTexte;
     int hauteurTexte;
     int largeurFinale;
@@ -153,16 +181,16 @@ static void dessiner_texte_centre_aggrandi(BITMAP *buffer,
     hauteurFinale = hauteurTexte * facteur;
 
     rectfill(buffer,
-             centreX - largeurFinale / 2 - SCREEN_W / 40,
-             centreY - hauteurFinale / 2 - SCREEN_H / 36,
-             centreX + largeurFinale / 2 + SCREEN_W / 40,
-             centreY + hauteurFinale / 2 + SCREEN_H / 36,
+             centreX - largeurFinale / 2 - largeurZoneDessin / 40,
+             centreY - hauteurFinale / 2 - hauteurZoneDessin / 36,
+             centreX + largeurFinale / 2 + largeurZoneDessin / 40,
+             centreY + hauteurFinale / 2 + hauteurZoneDessin / 36,
              couleurFond);
     rect(buffer,
-         centreX - largeurFinale / 2 - SCREEN_W / 40,
-         centreY - hauteurFinale / 2 - SCREEN_H / 36,
-         centreX + largeurFinale / 2 + SCREEN_W / 40,
-         centreY + hauteurFinale / 2 + SCREEN_H / 36,
+         centreX - largeurFinale / 2 - largeurZoneDessin / 40,
+         centreY - hauteurFinale / 2 - hauteurZoneDessin / 36,
+         centreX + largeurFinale / 2 + largeurZoneDessin / 40,
+         centreY + hauteurFinale / 2 + hauteurZoneDessin / 36,
          makecol(255, 255, 255));
 
     stretch_sprite(buffer,
@@ -178,6 +206,8 @@ static void dessiner_texte_centre_aggrandi(BITMAP *buffer,
 static void dessiner_scene_jeu(BITMAP *buffer, const RessourcesJeu *ressources, const EtatJeu *etat) {
     int i;
     BITMAP *fond;
+    int largeurZoneDessin = obtenir_largeur_zone_dessin(buffer);
+    int hauteurZoneDessin = obtenir_hauteur_zone_dessin(buffer);
 
     if (!buffer || !ressources || !etat || !ressources->player) {
         return;
@@ -194,15 +224,15 @@ static void dessiner_scene_jeu(BITMAP *buffer, const RessourcesJeu *ressources, 
                      fond->h,
                      0,
                      0,
-                     SCREEN_W,
-                     SCREEN_H);
+                     largeurZoneDessin,
+                     hauteurZoneDessin);
     }
 
     rectfill(buffer,
              0,
              etat->groundY,
-             SCREEN_W,
-             SCREEN_H,
+             largeurZoneDessin,
+             hauteurZoneDessin,
              makecol(70, 120, 55));
 
     for (i = 0; i < etat->nbBulles; i++) {
@@ -294,10 +324,12 @@ static void dessiner_option_menu(BITMAP *buffer,
                                  int y,
                                  int selectionnee,
                                  int active) {
-    int demiLargeur = SCREEN_W / 6;
-    int demiHauteur = SCREEN_H / 45;
-    int x1 = SCREEN_W / 2 - demiLargeur;
-    int x2 = SCREEN_W / 2 + demiLargeur;
+    int largeurZoneDessin = obtenir_largeur_zone_dessin(buffer);
+    int hauteurZoneDessin = obtenir_hauteur_zone_dessin(buffer);
+    int demiLargeur = largeurZoneDessin / 6;
+    int demiHauteur = hauteurZoneDessin / 45;
+    int x1 = largeurZoneDessin / 2 - demiLargeur;
+    int x2 = largeurZoneDessin / 2 + demiLargeur;
     int couleurFond;
     int couleurTexte;
     int couleurCadre;
@@ -318,7 +350,7 @@ static void dessiner_option_menu(BITMAP *buffer,
 
     rectfill(buffer, x1, y - demiHauteur, x2, y + demiHauteur, couleurFond);
     rect(buffer, x1, y - demiHauteur, x2, y + demiHauteur, couleurCadre);
-    textout_centre_ex(buffer, font, texte, SCREEN_W / 2, y - text_height(font) / 2, couleurTexte, -1);
+    textout_centre_ex(buffer, font, texte, largeurZoneDessin / 2, y - text_height(font) / 2, couleurTexte, -1);
 }
 
 static void tronquer_texte_pour_largeur(const char *source, char *destination, size_t tailleDestination, int largeurMax) {
@@ -360,6 +392,8 @@ static void tronquer_texte_pour_largeur(const char *source, char *destination, s
 static void dessiner_panneau_hud(BITMAP *buffer, const EtatJeu *etat) {
     char ligne[128];
     char pseudo[TAILLE_PSEUDO_MAX + 8];
+    int largeurZoneDessin;
+    int hauteurZoneDessin;
     int margeX;
     int margeY;
     int largeur;
@@ -377,16 +411,18 @@ static void dessiner_panneau_hud(BITMAP *buffer, const EtatJeu *etat) {
         return;
     }
 
-    margeX = SCREEN_W / 40;
-    margeY = SCREEN_H / 36;
-    largeur = SCREEN_W / 4;
-    hauteur = SCREEN_H / 6;
+    largeurZoneDessin = obtenir_largeur_zone_dessin(buffer);
+    hauteurZoneDessin = obtenir_hauteur_zone_dessin(buffer);
+    margeX = largeurZoneDessin / 40;
+    margeY = hauteurZoneDessin / 36;
+    largeur = largeurZoneDessin / 4;
+    hauteur = hauteurZoneDessin / 6;
     x1 = margeX;
     y1 = margeY;
     x2 = x1 + largeur;
     y2 = y1 + hauteur;
-    interligne = text_height(font) + SCREEN_H / 90;
-    largeurTexte = largeur - SCREEN_W / 45;
+    interligne = text_height(font) + hauteurZoneDessin / 90;
+    largeurTexte = largeur - largeurZoneDessin / 45;
 
     if (etat->niveau != 1) {
         rectfill(buffer, x1, y1, x2, y2, makecol(150, 20, 20));
@@ -394,29 +430,29 @@ static void dessiner_panneau_hud(BITMAP *buffer, const EtatJeu *etat) {
         rect(buffer, x1 + 3, y1 + 3, x2 - 3, y2 - 3, makecol(90, 0, 0));
     }
 
-    y = y1 + SCREEN_H / 70;
-    textout_ex(buffer, font, "HUD JOUEUR", x1 + SCREEN_W / 90, y, makecol(255, 245, 245), -1);
+    y = y1 + hauteurZoneDessin / 70;
+    textout_ex(buffer, font, "HUD JOUEUR", x1 + largeurZoneDessin / 90, y, makecol(255, 245, 245), -1);
 
     y += interligne;
     snprintf(ligne, sizeof(ligne), "Niveau : %d/%d", etat->niveau, etat->niveauMaximum);
-    textout_ex(buffer, font, ligne, x1 + SCREEN_W / 90, y, makecol(255, 255, 255), -1);
+    textout_ex(buffer, font, ligne, x1 + largeurZoneDessin / 90, y, makecol(255, 255, 255), -1);
 
     y += interligne;
     snprintf(ligne, sizeof(ligne), "Score : %d", etat->score);
-    textout_ex(buffer, font, ligne, x1 + SCREEN_W / 90, y, makecol(255, 255, 255), -1);
+    textout_ex(buffer, font, ligne, x1 + largeurZoneDessin / 90, y, makecol(255, 255, 255), -1);
 
     y += interligne;
     snprintf(pseudo, sizeof(pseudo), "Pseudo : %s", etat->pseudo[0] != '\0' ? etat->pseudo : "ANONYME");
     tronquer_texte_pour_largeur(pseudo, ligne, sizeof(ligne), largeurTexte);
-    textout_ex(buffer, font, ligne, x1 + SCREEN_W / 90, y, makecol(255, 255, 255), -1);
+    textout_ex(buffer, font, ligne, x1 + largeurZoneDessin / 90, y, makecol(255, 255, 255), -1);
 
     y += interligne;
     if (etat->auraArdenteActive) {
         tempsSecondes = (float) etat->dureeRestanteAuraArdenteMs / 1000.0f;
         snprintf(ligne, sizeof(ligne), "Aura ardente : %.1f s", tempsSecondes);
-        textout_ex(buffer, font, ligne, x1 + SCREEN_W / 90, y, makecol(255, 240, 120), -1);
+        textout_ex(buffer, font, ligne, x1 + largeurZoneDessin / 90, y, makecol(255, 240, 120), -1);
     } else {
-        textout_ex(buffer, font, "Aura ardente : INACTIVE", x1 + SCREEN_W / 90, y, makecol(255, 220, 220), -1);
+        textout_ex(buffer, font, "Aura ardente : INACTIVE", x1 + largeurZoneDessin / 90, y, makecol(255, 220, 220), -1);
     }
 }
 
@@ -442,13 +478,6 @@ static void normaliser_transparence_magenta(BITMAP *bitmap) {
             }
         }
     }
-}
-
-static int lire_entier_32_le(const unsigned char *octets) {
-    return (int) octets[0] |
-           ((int) octets[1] << 8) |
-           ((int) octets[2] << 16) |
-           ((int) octets[3] << 24);
 }
 
 static int fichier_existe_simple(const char *chemin) {
@@ -500,45 +529,6 @@ static int resoudre_chemin_ressource(const char *chemin, char *destination, size
 
     destination[0] = '\0';
     return 0;
-}
-
-static int determiner_taille_bitmap(const char *chemin, int *largeur, int *hauteur) {
-    FILE *fichier;
-    char cheminResolu[512];
-    unsigned char entete[26];
-    int hauteurBitmap;
-
-    if (!chemin || !largeur || !hauteur || chemin[0] == '\0') {
-        return 0;
-    }
-
-    if (!resoudre_chemin_ressource(chemin, cheminResolu, sizeof(cheminResolu))) {
-        return 0;
-    }
-
-    fichier = fopen(cheminResolu, "rb");
-    if (!fichier) {
-        return 0;
-    }
-
-    if (fread(entete, 1, sizeof(entete), fichier) != sizeof(entete)) {
-        fclose(fichier);
-        return 0;
-    }
-    fclose(fichier);
-
-    if (entete[0] != 'B' || entete[1] != 'M') {
-        return 0;
-    }
-
-    *largeur = lire_entier_32_le(&entete[18]);
-    hauteurBitmap = lire_entier_32_le(&entete[22]);
-    if (*largeur <= 0 || hauteurBitmap == 0) {
-        return 0;
-    }
-
-    *hauteur = hauteurBitmap < 0 ? -hauteurBitmap : hauteurBitmap;
-    return 1;
 }
 
 int initialiser_affichage(const char *fond_path,
@@ -844,7 +834,7 @@ int charger_ressources_jeu(RessourcesJeu *ressources,
         return 0;
     }
 
-    ressources->buffer = create_bitmap(SCREEN_W, SCREEN_H);
+    ressources->buffer = create_bitmap(screen->w, screen->h);
     if (!ressources->buffer) {
         allegro_message("Impossible de creer le buffer");
         liberer_ressources_jeu(ressources);
@@ -871,25 +861,25 @@ void dessiner_menu_depart(const RessourcesJeu *ressources, int selection, int re
     }
 
     dessiner_fond_scene(ressources->buffer, ressources);
-    dessiner_panneau_menu(ressources->buffer, SCREEN_W / 4, SCREEN_H / 4);
+    dessiner_panneau_menu(ressources->buffer, ressources->buffer->w / 4, ressources->buffer->h / 4);
 
     textout_centre_ex(ressources->buffer,
                       font,
                       "MENU DE DEPART",
-                      SCREEN_W / 2,
-                      SCREEN_H / 2 - SCREEN_H / 5,
+                      ressources->buffer->w / 2,
+                      ressources->buffer->h / 2 - ressources->buffer->h / 5,
                       makecol(255, 255, 255),
                       -1);
     textout_centre_ex(ressources->buffer,
                       font,
                       "Utilisez Haut/Bas puis Entree",
-                      SCREEN_W / 2,
-                      SCREEN_H / 2 - SCREEN_H / 6,
+                      ressources->buffer->w / 2,
+                      ressources->buffer->h / 2 - ressources->buffer->h / 6,
                       makecol(150, 150, 150),
                       -1);
 
-    yBase = SCREEN_H / 2 - SCREEN_H / 13;
-    pasVertical = SCREEN_H / 18;
+    yBase = ressources->buffer->h / 2 - ressources->buffer->h / 13;
+    pasVertical = ressources->buffer->h / 18;
     for (i = 0; i < 5; i++) {
         dessiner_option_menu(ressources->buffer,
                              options[i],
@@ -902,13 +892,13 @@ void dessiner_menu_depart(const RessourcesJeu *ressources, int selection, int re
         textout_centre_ex(ressources->buffer,
                           font,
                           "Aucune sauvegarde disponible",
-                          SCREEN_W / 2,
-                          SCREEN_H / 2 + SCREEN_H / 5,
+                          ressources->buffer->w / 2,
+                          ressources->buffer->h / 2 + ressources->buffer->h / 5,
                           makecol(120, 120, 120),
                           -1);
     }
 
-    blit(ressources->buffer, screen, 0, 0, 0, 0, SCREEN_W, SCREEN_H);
+    afficher_buffer_a_l_ecran(ressources->buffer);
 }
 
 void dessiner_menu_parametres(const RessourcesJeu *ressources,
@@ -922,18 +912,18 @@ void dessiner_menu_parametres(const RessourcesJeu *ressources,
     }
 
     dessiner_fond_scene(ressources->buffer, ressources);
-    dessiner_panneau_menu(ressources->buffer, SCREEN_W / 4, SCREEN_H / 4);
+    dessiner_panneau_menu(ressources->buffer, ressources->buffer->w / 4, ressources->buffer->h / 4);
 
     textout_centre_ex(ressources->buffer,
                       font,
                       "PARAMETRES",
-                      SCREEN_W / 2,
-                      SCREEN_H / 2 - SCREEN_H / 5,
+                      ressources->buffer->w / 2,
+                      ressources->buffer->h / 2 - ressources->buffer->h / 5,
                       makecol(255, 255, 255),
                       -1);
 
-    yBase = SCREEN_H / 2 - SCREEN_H / 10;
-    pasVertical = SCREEN_H / 18;
+    yBase = ressources->buffer->h / 2 - ressources->buffer->h / 10;
+    pasVertical = ressources->buffer->h / 18;
 
     dessiner_option_menu(ressources->buffer,
                          modeDemonstrationActif ? "Mode demonstration : ON" : "Mode demonstration : OFF",
@@ -955,12 +945,12 @@ void dessiner_menu_parametres(const RessourcesJeu *ressources,
     textout_centre_ex(ressources->buffer,
                       font,
                       "Entree pour valider, ESC pour revenir",
-                      SCREEN_W / 2,
-                      SCREEN_H / 2 + SCREEN_H / 5,
+                      ressources->buffer->w / 2,
+                      ressources->buffer->h / 2 + ressources->buffer->h / 5,
                       makecol(140, 140, 140),
                       -1);
 
-    blit(ressources->buffer, screen, 0, 0, 0, 0, SCREEN_W, SCREEN_H);
+    afficher_buffer_a_l_ecran(ressources->buffer);
 }
 
 void dessiner_ecran_information(const RessourcesJeu *ressources,
@@ -973,61 +963,66 @@ void dessiner_ecran_information(const RessourcesJeu *ressources,
     }
 
     dessiner_fond_scene(ressources->buffer, ressources);
-    dessiner_panneau_menu(ressources->buffer, SCREEN_W / 4, SCREEN_H / 4);
+    dessiner_panneau_menu(ressources->buffer, ressources->buffer->w / 4, ressources->buffer->h / 4);
 
-    textout_centre_ex(ressources->buffer, font, titre, SCREEN_W / 2, SCREEN_H / 2 - SCREEN_H / 6, makecol(255, 255, 255), -1);
-    textout_centre_ex(ressources->buffer, font, ligne1, SCREEN_W / 2, SCREEN_H / 2 - SCREEN_H / 18, makecol(210, 210, 210), -1);
-    textout_centre_ex(ressources->buffer, font, ligne2, SCREEN_W / 2, SCREEN_H / 2, makecol(210, 210, 210), -1);
-    textout_centre_ex(ressources->buffer, font, ligne3, SCREEN_W / 2, SCREEN_H / 2 + SCREEN_H / 18, makecol(210, 210, 210), -1);
+    textout_centre_ex(ressources->buffer, font, titre, ressources->buffer->w / 2, ressources->buffer->h / 2 - ressources->buffer->h / 6, makecol(255, 255, 255), -1);
+    textout_centre_ex(ressources->buffer, font, ligne1, ressources->buffer->w / 2, ressources->buffer->h / 2 - ressources->buffer->h / 18, makecol(210, 210, 210), -1);
+    textout_centre_ex(ressources->buffer, font, ligne2, ressources->buffer->w / 2, ressources->buffer->h / 2, makecol(210, 210, 210), -1);
+    textout_centre_ex(ressources->buffer, font, ligne3, ressources->buffer->w / 2, ressources->buffer->h / 2 + ressources->buffer->h / 18, makecol(210, 210, 210), -1);
     textout_centre_ex(ressources->buffer,
                       font,
                       "ESC ou Retour arriere pour revenir au menu",
-                      SCREEN_W / 2,
-                      SCREEN_H / 2 + SCREEN_H / 7,
+                      ressources->buffer->w / 2,
+                      ressources->buffer->h / 2 + ressources->buffer->h / 7,
                       makecol(140, 140, 140),
                       -1);
 
-    blit(ressources->buffer, screen, 0, 0, 0, 0, SCREEN_W, SCREEN_H);
+    afficher_buffer_a_l_ecran(ressources->buffer);
 }
 
 void dessiner_saisie_pseudo(const RessourcesJeu *ressources, const char *pseudo) {
-    int demiLargeur = SCREEN_W / 4;
-    int demiHauteur = SCREEN_H / 5;
-    int champDemiLargeur = SCREEN_W / 6;
-    int champHauteur = SCREEN_H / 18;
+    int demiLargeur;
+    int demiHauteur;
+    int champDemiLargeur;
+    int champHauteur;
 
     if (!ressources || !ressources->buffer) {
         return;
     }
 
+    demiLargeur = ressources->buffer->w / 4;
+    demiHauteur = ressources->buffer->h / 5;
+    champDemiLargeur = ressources->buffer->w / 6;
+    champHauteur = ressources->buffer->h / 18;
+
     dessiner_fond_scene(ressources->buffer, ressources);
     dessiner_panneau_menu(ressources->buffer, demiLargeur, demiHauteur);
 
-    textout_centre_ex(ressources->buffer, font, "NOUVELLE PARTIE", SCREEN_W / 2, SCREEN_H / 2 - SCREEN_H / 7, makecol(255, 255, 255), -1);
+    textout_centre_ex(ressources->buffer, font, "NOUVELLE PARTIE", ressources->buffer->w / 2, ressources->buffer->h / 2 - ressources->buffer->h / 7, makecol(255, 255, 255), -1);
     textout_centre_ex(ressources->buffer,
                       font,
                       "Entrez votre pseudo puis appuyez sur Entree",
-                      SCREEN_W / 2,
-                      SCREEN_H / 2 - SCREEN_H / 10,
+                      ressources->buffer->w / 2,
+                      ressources->buffer->h / 2 - ressources->buffer->h / 10,
                       makecol(200, 200, 200),
                       -1);
 
     rectfill(ressources->buffer,
-             SCREEN_W / 2 - champDemiLargeur,
-             SCREEN_H / 2 - champHauteur / 2,
-             SCREEN_W / 2 + champDemiLargeur,
-             SCREEN_H / 2 + champHauteur / 2,
+             ressources->buffer->w / 2 - champDemiLargeur,
+             ressources->buffer->h / 2 - champHauteur / 2,
+             ressources->buffer->w / 2 + champDemiLargeur,
+             ressources->buffer->h / 2 + champHauteur / 2,
              makecol(20, 20, 20));
     rect(ressources->buffer,
-         SCREEN_W / 2 - champDemiLargeur,
-         SCREEN_H / 2 - champHauteur / 2,
-         SCREEN_W / 2 + champDemiLargeur,
-         SCREEN_H / 2 + champHauteur / 2,
+         ressources->buffer->w / 2 - champDemiLargeur,
+         ressources->buffer->h / 2 - champHauteur / 2,
+         ressources->buffer->w / 2 + champDemiLargeur,
+         ressources->buffer->h / 2 + champHauteur / 2,
          makecol(255, 255, 255));
     textprintf_centre_ex(ressources->buffer,
                          font,
-                         SCREEN_W / 2,
-                         SCREEN_H / 2 - text_height(font) / 2,
+                         ressources->buffer->w / 2,
+                         ressources->buffer->h / 2 - text_height(font) / 2,
                          makecol(255, 255, 255),
                          -1,
                          "%s_",
@@ -1035,12 +1030,12 @@ void dessiner_saisie_pseudo(const RessourcesJeu *ressources, const char *pseudo)
     textout_centre_ex(ressources->buffer,
                       font,
                       "ESC pour revenir au menu",
-                      SCREEN_W / 2,
-                      SCREEN_H / 2 + SCREEN_H / 10,
+                      ressources->buffer->w / 2,
+                      ressources->buffer->h / 2 + ressources->buffer->h / 10,
                       makecol(140, 140, 140),
                       -1);
 
-    blit(ressources->buffer, screen, 0, 0, 0, 0, SCREEN_W, SCREEN_H);
+    afficher_buffer_a_l_ecran(ressources->buffer);
 }
 
 void dessiner_decompte_depart(const RessourcesJeu *ressources, const EtatJeu *etat, int valeur) {
@@ -1054,13 +1049,13 @@ void dessiner_decompte_depart(const RessourcesJeu *ressources, const EtatJeu *et
     uszprintf(texte, sizeof(texte), "%d", valeur);
     dessiner_texte_centre_aggrandi(ressources->buffer,
                                    texte,
-                                   SCREEN_W / 2,
-                                   SCREEN_H / 2,
+                                   ressources->buffer->w / 2,
+                                   ressources->buffer->h / 2,
                                    makecol(255, 255, 255),
                                    makecol(0, 0, 0),
                                    10);
 
-    blit(ressources->buffer, screen, 0, 0, 0, 0, SCREEN_W, SCREEN_H);
+    afficher_buffer_a_l_ecran(ressources->buffer);
 }
 
 void dessiner_jeu(const RessourcesJeu *ressources, const EtatJeu *etat) {
@@ -1072,17 +1067,17 @@ void dessiner_jeu(const RessourcesJeu *ressources, const EtatJeu *etat) {
     dessiner_panneau_hud(ressources->buffer, etat);
 
     if (etat->perdu) {
-        afficher_message_centre(ressources->buffer, SCREEN_W / 7, makecol(255, 0, 0), makecol(255, 0, 0), "PERDU");
+        afficher_message_centre(ressources->buffer, ressources->buffer->w / 7, makecol(255, 0, 0), makecol(255, 0, 0), "PERDU");
     }
     if (etat->gagne) {
         if (etat->niveau < etat->niveauMaximum) {
-            afficher_message_centre(ressources->buffer, SCREEN_W / 5, makecol(0, 255, 0), makecol(0, 255, 0), "GAGNE - ENTREE POUR NIVEAU SUIVANT");
+            afficher_message_centre(ressources->buffer, ressources->buffer->w / 5, makecol(0, 255, 0), makecol(0, 255, 0), "GAGNE - ENTREE POUR NIVEAU SUIVANT");
         } else {
-            afficher_message_centre(ressources->buffer, SCREEN_W / 5, makecol(0, 255, 0), makecol(0, 255, 0), "VICTOIRE FINALE - ENTREE POUR MENU");
+            afficher_message_centre(ressources->buffer, ressources->buffer->w / 5, makecol(0, 255, 0), makecol(0, 255, 0), "VICTOIRE FINALE - ENTREE POUR MENU");
         }
     }
 
-    blit(ressources->buffer, screen, 0, 0, 0, 0, SCREEN_W, SCREEN_H);
+    afficher_buffer_a_l_ecran(ressources->buffer);
 }
 
 void liberer_bitmap(BITMAP **bitmap) {

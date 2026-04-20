@@ -61,21 +61,21 @@ void traiter_ihm_menu(ActionsIHM *actions, int repriseDisponible) {
     actions->charger = 0;
     reinitialiser_actions_navigation(actions);
 
-    if (key[KEY_UP] && !actions->oldMenuUpState) {
+    if (key[KEY_UP] && !actions->toucheHautMenuPrecedente) {
         actions->menuSelection--;
         if (actions->menuSelection < 0) {
             actions->menuSelection = MENU_TOTAL - 1;
         }
     }
 
-    if (key[KEY_DOWN] && !actions->oldMenuDownState) {
+    if (key[KEY_DOWN] && !actions->toucheBasMenuPrecedente) {
         actions->menuSelection++;
         if (actions->menuSelection >= MENU_TOTAL) {
             actions->menuSelection = 0;
         }
     }
 
-    if (key[KEY_ENTER] && !actions->oldMenuEnterState) {
+    if (key[KEY_ENTER] && !actions->toucheEntreeMenuPrecedente) {
         switch (actions->menuSelection) {
             case MENU_NOUVELLE_PARTIE:
                 actions->nouvellePartie = 1;
@@ -101,10 +101,10 @@ void traiter_ihm_menu(ActionsIHM *actions, int repriseDisponible) {
         actions->quitter = 1;
     }
 
-    actions->oldMenuUpState = key[KEY_UP];
-    actions->oldMenuDownState = key[KEY_DOWN];
-    actions->oldMenuEnterState = key[KEY_ENTER];
-    actions->oldBackState = key[KEY_ESC];
+    actions->toucheHautMenuPrecedente = key[KEY_UP];
+    actions->toucheBasMenuPrecedente = key[KEY_DOWN];
+    actions->toucheEntreeMenuPrecedente = key[KEY_ENTER];
+    actions->toucheRetourPrecedente = key[KEY_ESC];
 }
 
 void traiter_ihm_ecran_secondaire(ActionsIHM *actions) {
@@ -117,14 +117,14 @@ void traiter_ihm_ecran_secondaire(ActionsIHM *actions) {
     actions->charger = 0;
     reinitialiser_actions_navigation(actions);
 
-    if ((key[KEY_ESC] || key[KEY_BACKSPACE]) && !actions->oldBackState) {
+    if ((key[KEY_ESC] || key[KEY_BACKSPACE]) && !actions->toucheRetourPrecedente) {
         actions->retourMenu = 1;
     }
 
-    actions->oldBackState = key[KEY_ESC] || key[KEY_BACKSPACE];
-    actions->oldMenuUpState = key[KEY_UP];
-    actions->oldMenuDownState = key[KEY_DOWN];
-    actions->oldMenuEnterState = key[KEY_ENTER];
+    actions->toucheRetourPrecedente = key[KEY_ESC] || key[KEY_BACKSPACE];
+    actions->toucheHautMenuPrecedente = key[KEY_UP];
+    actions->toucheBasMenuPrecedente = key[KEY_DOWN];
+    actions->toucheEntreeMenuPrecedente = key[KEY_ENTER];
 }
 
 void traiter_ihm_parametres(ActionsIHM *actions, int modeDemonstrationActif) {
@@ -139,14 +139,14 @@ void traiter_ihm_parametres(ActionsIHM *actions, int modeDemonstrationActif) {
     actions->charger = 0;
     reinitialiser_actions_navigation(actions);
 
-    if (key[KEY_UP] && !actions->oldMenuUpState) {
+    if (key[KEY_UP] && !actions->toucheHautMenuPrecedente) {
         actions->parametresSelection--;
         if (actions->parametresSelection < 0) {
             actions->parametresSelection = selectionMax;
         }
     }
 
-    if (key[KEY_DOWN] && !actions->oldMenuDownState) {
+    if (key[KEY_DOWN] && !actions->toucheBasMenuPrecedente) {
         actions->parametresSelection++;
         if (actions->parametresSelection > selectionMax) {
             actions->parametresSelection = 0;
@@ -157,7 +157,7 @@ void traiter_ihm_parametres(ActionsIHM *actions, int modeDemonstrationActif) {
         actions->parametresSelection = PARAM_MODE_DEMO;
     }
 
-    if (key[KEY_ENTER] && !actions->oldMenuEnterState) {
+    if (key[KEY_ENTER] && !actions->toucheEntreeMenuPrecedente) {
         switch (actions->parametresSelection) {
             case PARAM_MODE_DEMO:
                 actions->basculerModeDemonstration = 1;
@@ -183,14 +183,14 @@ void traiter_ihm_parametres(ActionsIHM *actions, int modeDemonstrationActif) {
         }
     }
 
-    if ((key[KEY_ESC] || key[KEY_BACKSPACE]) && !actions->oldBackState) {
+    if ((key[KEY_ESC] || key[KEY_BACKSPACE]) && !actions->toucheRetourPrecedente) {
         actions->retourMenu = 1;
     }
 
-    actions->oldBackState = key[KEY_ESC] || key[KEY_BACKSPACE];
-    actions->oldMenuUpState = key[KEY_UP];
-    actions->oldMenuDownState = key[KEY_DOWN];
-    actions->oldMenuEnterState = key[KEY_ENTER];
+    actions->toucheRetourPrecedente = key[KEY_ESC] || key[KEY_BACKSPACE];
+    actions->toucheHautMenuPrecedente = key[KEY_UP];
+    actions->toucheBasMenuPrecedente = key[KEY_DOWN];
+    actions->toucheEntreeMenuPrecedente = key[KEY_ENTER];
 }
 
 void traiter_ihm_jeu(ActionsIHM *actions, CommandesJeu *commandes, int partieBloquee) {
@@ -212,26 +212,26 @@ void traiter_ihm_jeu(ActionsIHM *actions, CommandesJeu *commandes, int partieBlo
             commandes->deplacementHorizontal = 1;
         }
 
-        if (key[KEY_UP] && !actions->oldShootState) {
+        if (key[KEY_UP] && !actions->toucheTirPrecedente) {
             commandes->tirer = 1;
         }
     }
 
-    if (key[KEY_S] && !actions->oldSaveState) {
+    if (key[KEY_S] && !actions->toucheSauvegardePrecedente) {
         actions->sauvegarder = 1;
     }
-    if (key[KEY_L] && !actions->oldLoadState) {
+    if (key[KEY_L] && !actions->toucheChargementPrecedente) {
         actions->charger = 1;
     }
-    if (partieBloquee && key[KEY_ENTER] && !actions->oldGameEnterState) {
+    if (partieBloquee && key[KEY_ENTER] && !actions->toucheEntreeJeuPrecedente) {
         actions->retourMenu = 1;
     }
 
-    actions->oldSaveState = key[KEY_S];
-    actions->oldLoadState = key[KEY_L];
-    actions->oldShootState = key[KEY_UP];
-    actions->oldGameEnterState = key[KEY_ENTER];
-    actions->oldBackState = key[KEY_ESC];
+    actions->toucheSauvegardePrecedente = key[KEY_S];
+    actions->toucheChargementPrecedente = key[KEY_L];
+    actions->toucheTirPrecedente = key[KEY_UP];
+    actions->toucheEntreeJeuPrecedente = key[KEY_ENTER];
+    actions->toucheRetourPrecedente = key[KEY_ESC];
 }
 
 void traiter_ihm_saisie_pseudo(ActionsIHM *actions, char *pseudo, int taillePseudo) {
