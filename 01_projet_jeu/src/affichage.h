@@ -5,8 +5,6 @@
 
 #include "logique_jeu.h"
 
-#define NOMBRE_FONDS_NIVEAUX 5
-
 typedef struct {
     BITMAP *fond;
     BITMAP *fondsNiveaux[NOMBRE_FONDS_NIVEAUX];
@@ -22,12 +20,9 @@ typedef struct {
 } RessourcesJeu;
 
 int initialiser_affichage(const char *fond_path,
-                          int largeur_defaut,
-                          int hauteur_defaut,
                           int profondeur_couleur);
 int ressource_existe(const char *chemin);
 BITMAP *charger_bitmap_ou_erreur(const char *chemin);
-BITMAP *resize_bitmap(BITMAP *src, float scale);
 int charger_ressources_jeu(RessourcesJeu *ressources,
                            const char *fond_path,
                            const char *player_path,
@@ -41,6 +36,10 @@ void dessiner_menu_depart(const RessourcesJeu *ressources, int selection, int re
 void dessiner_menu_parametres(const RessourcesJeu *ressources,
                               int selection,
                               int modeDemonstrationActif);
+void dessiner_selection_niveau(const RessourcesJeu *ressources,
+                               int selection,
+                               int niveauMaximumDebloque,
+                               int niveauMaximumTotal);
 void dessiner_ecran_information(const RessourcesJeu *ressources,
                                 const char *titre,
                                 const char *ligne1,

@@ -4,10 +4,12 @@
 #include <math.h>
 #include <allegro.h>
 
-#define MAX_BULLES 32
+#include "src/config_jeu.h"
+
+#define MAX_BULLES TAILLE_PSEUDO_MAX
 
 typedef enum {
-    BULLE_TRES_GRANDE = 0,
+    BULLE_TRES_GRANDE,
     BULLE_GRANDE,
     BULLE_MOYENNE,
     BULLE_PETITE
@@ -30,21 +32,53 @@ typedef struct {
 /* --------------------------------------------------
    Redimensionnement bitmap
 -------------------------------------------------- */
-BITMAP* resize_bitmap(BITMAP *src, float scale) {
-    int newW = (int)(src->w * scale);
-    int newH = (int)(src->h * scale);
+static int plus_petite_dimension_test(int largeur, int hauteur) {
+    if (largeur <= VALEUR_NULLE) {
+        return hauteur;
+    }
+    if (hauteur <= VALEUR_NULLE) {
+        return largeur;
+    }
+    return largeur < hauteur ? largeur : hauteur;
+}
+
+static int dimension_relative_test(int reference, int denominateur) {
+    int valeur;
+
+    if (reference <= VALEUR_NULLE || denominateur <= VALEUR_NULLE) {
+        return VALEUR_NULLE;
+    }
+
+    valeur = reference / denominateur;
+    if (valeur <= VALEUR_NULLE) {
+        valeur = reference / reference;
+    }
+
+    return valeur;
+}
+
+BITMAP* resize_bitmap_hauteur_relative_test(BITMAP *src, int hauteurReference, int denominateur) {
+    int newH;
+    int newW;
     BITMAP *dest = NULL;
 
-    if (newW <= 0) newW = 1;
-    if (newH <= 0) newH = 1;
+    if (!src || src->w <= VALEUR_NULLE || src->h <= VALEUR_NULLE) {
+        return NULL;
+    }
+
+    newH = dimension_relative_test(hauteurReference, denominateur);
+    newW = src->w * newH / src->h;
+
+    if (newW <= VALEUR_NULLE) newW = VALEUR_UNITAIRE;
+    if (newH <= VALEUR_NULLE) newH = VALEUR_UNITAIRE;
 
     dest = create_bitmap(newW, newH);
     if (!dest) return NULL;
 
-    clear_to_color(dest, makecol(255, 0, 255));
+    clear_to_color(dest, makecol(COULEUR_MAGENTA_R, COULEUR_MAGENTA_G, COULEUR_MAGENTA_B));
     stretch_blit(src, dest,
-                 0, 0, src->w, src->h,
-                 0, 0, newW, newH);
+                 VALEUR_NULLE, VALEUR_NULLE, src->w, src->h,
+                 VALEUR_NULLE, VALEUR_NULLE, newW, newH);
 
     return dest;
 }
@@ -52,17 +86,17 @@ BITMAP* resize_bitmap(BITMAP *src, float scale) {
 static int fichier_existe_simple(const char *chemin) {
     FILE *fichier = NULL;
 
-    if (!chemin || chemin[0] == '\0') {
-        return 0;
+    if (!chemin || chemin[CHAINE_DEBUT] == CARACTERE_FIN_CHAINE) {
+        return FAUX;
     }
 
     fichier = fopen(chemin, "rb");
     if (!fichier) {
-        return 0;
+        return FAUX;
     }
 
     fclose(fichier);
-    return 1;
+    return VRAI;
 }
 
 static int resoudre_chemin_ressource(const char *chemin, char *destination, size_t taille) {
@@ -75,67 +109,67 @@ static int resoudre_chemin_ressource(const char *chemin, char *destination, size
     };
     int i;
 
-    if (!chemin || !destination || taille == 0 || chemin[0] == '\0') {
-        return 0;
+    if (!chemin || !destination || taille == VALEUR_NULLE || chemin[CHAINE_DEBUT] == CARACTERE_FIN_CHAINE) {
+        return FAUX;
     }
 
-    for (i = 0; i < (int) (sizeof(prefixes) / sizeof(prefixes[0])); i++) {
+    for (i = INDEX_PREMIER; i < (int) (sizeof(prefixes) / sizeof(prefixes[CHAINE_DEBUT])); i++) {
         if (snprintf(destination, taille, "%s%s", prefixes[i], chemin) >= (int) taille) {
             continue;
         }
         if (fichier_existe_simple(destination)) {
-            return 1;
+            return VRAI;
         }
     }
 
-    destination[0] = '\0';
-    return 0;
+    destination[CHAINE_DEBUT] = CARACTERE_FIN_CHAINE;
+    return FAUX;
 }
 
-static int lire_entier_32_le(const unsigned char *octets) {
-    return (int) octets[0] |
-           ((int) octets[1] << 8) |
-           ((int) octets[2] << 16) |
-           ((int) octets[3] << 24);
+static int lire_entier_le(const unsigned char *octets) {
+    return (int) octets[INDEX_PREMIER] |
+           ((int) octets[INDEX_SUIVANT] << CODE_BITS_TOUCHE) |
+           ((int) octets[VALEUR_DOUBLE] << DUREE_UNE_IMAGE_MS) |
+           ((int) octets[VALEUR_TRIPLE] << VALEUR_VINGT_QUATRE);
 }
 
 static int determiner_taille_bitmap(const char *chemin, int *largeur, int *hauteur) {
     FILE *fichier = NULL;
-    char cheminResolu[512];
-    unsigned char entete[26];
+    char cheminResolu[TAILLE_CHEMIN_RESSOURCE];
+    unsigned char entete[DIVISEUR_VINGT_SIXIEME];
     int hauteurBitmap;
 
-    if (!chemin || !largeur || !hauteur || chemin[0] == '\0') {
-        return 0;
+    if (!chemin || !largeur || !hauteur || chemin[CHAINE_DEBUT] == CARACTERE_FIN_CHAINE) {
+        return FAUX;
     }
 
     if (!resoudre_chemin_ressource(chemin, cheminResolu, sizeof(cheminResolu))) {
-        return 0;
+        return FAUX;
     }
 
     fichier = fopen(cheminResolu, "rb");
     if (!fichier) {
-        return 0;
+        return FAUX;
     }
 
-    if (fread(entete, 1, sizeof(entete), fichier) != sizeof(entete)) {
+    if (fread(entete, INDEX_SUIVANT, sizeof(entete), fichier) != sizeof(entete)) {
         fclose(fichier);
-        return 0;
+        return FAUX;
     }
     fclose(fichier);
 
-    if (entete[0] != 'B' || entete[1] != 'M') {
-        return 0;
+    if (entete[INDEX_PREMIER] != 'B' || entete[INDEX_SUIVANT] != 'M') {
+        return FAUX;
     }
 
-    *largeur = lire_entier_32_le(&entete[18]);
-    hauteurBitmap = lire_entier_32_le(&entete[22]);
-    if (*largeur <= 0 || hauteurBitmap == 0) {
-        return 0;
+    *largeur = lire_entier_le(&entete[VALEUR_DIX_HUIT]);
+    hauteurBitmap = lire_entier_le(&entete[DIVISEUR_VINGT_DEUXIEME]);
+    if (*largeur <= VALEUR_NULLE || hauteurBitmap == VALEUR_NULLE) {
+        return FAUX;
     }
 
-    *hauteur = hauteurBitmap < 0 ? -hauteurBitmap : hauteurBitmap;
-    return 1;
+    *hauteur = hauteurBitmap < VALEUR_NULLE ? -hauteurBitmap : hauteurBitmap;
+    return VRAI;
 }
 
 /* --------------------------------------------------
@@ -159,27 +193,27 @@ void configurer_bulle(Bulle *b, TailleBulle taille, BITMAP *sprites[]) {
 
     switch (taille) {
         case BULLE_TRES_GRANDE:
-            b->gravite = 0.28f;
-            b->rebondSol = -16.0f;   // très haut
-            b->attenuationX = 0.995f;
+            b->gravite = (float) SCREEN_H / (float) DIVISEUR_GRAVITE_TRES_GRANDE;
+            b->rebondSol = -(float) SCREEN_H / (float) DIVISEUR_REBOND_TRES_GRANDE;   // très haut
+            b->attenuationX = ATTENUATION_TRES_GRANDE;
             break;
 
         case BULLE_GRANDE:
-            b->gravite = 0.26f;
-            b->rebondSol = -13.0f;   // haut
-            b->attenuationX = 0.992f;
+            b->gravite = (float) SCREEN_H / (float) DIVISEUR_GRAVITE_GRANDE;
+            b->rebondSol = -(float) SCREEN_H / (float) DIVISEUR_REBOND_GRANDE;   // haut
+            b->attenuationX = ATTENUATION_GRANDE;
             break;
 
         case BULLE_MOYENNE:
-            b->gravite = 0.24f;
-            b->rebondSol = -10.0f;   // moyen
-            b->attenuationX = 0.989f;
+            b->gravite = (float) SCREEN_H / (float) DIVISEUR_GRAVITE_MOYENNE;
+            b->rebondSol = -(float) SCREEN_H / (float) DIVISEUR_REBOND_MOYENNE;   // moyen
+            b->attenuationX = ATTENUATION_MOYENNE;
             break;
 
         case BULLE_PETITE:
-            b->gravite = 0.22f;
-            b->rebondSol = -7.0f;    // faible
-            b->attenuationX = 0.985f;
+            b->gravite = (float) SCREEN_H / (float) DIVISEUR_GRAVITE_PETITE;
+            b->rebondSol = -(float) SCREEN_H / (float) DIVISEUR_REBOND_PETITE;    // faible
+            b->attenuationX = ATTENUATION_PETITE;
             break;
     }
 }
@@ -189,10 +223,10 @@ void configurer_bulle(Bulle *b, TailleBulle taille, BITMAP *sprites[]) {
 -------------------------------------------------- */
 int trouver_case_libre(Bulle bulles[]) {
     int i;
-    for (i = 0; i < MAX_BULLES; i++) {
+    for (i = INDEX_PREMIER; i < MAX_BULLES; i++) {
         if (!bulles[i].active) return i;
     }
-    return -1;
+    return INDEX_INVALIDE;
 }
 
 /* --------------------------------------------------
@@ -200,12 +234,12 @@ int trouver_case_libre(Bulle bulles[]) {
 -------------------------------------------------- */
 float vitesse_horizontale_fille(TailleBulle taille) {
     switch (taille) {
-        case BULLE_TRES_GRANDE: return 1.8f;
-        case BULLE_GRANDE:      return 2.4f;
-        case BULLE_MOYENNE:     return 3.0f;
-        case BULLE_PETITE:      return 3.8f;
+        case BULLE_TRES_GRANDE: return (float) SCREEN_W / (float) DIVISEUR_VITESSE_ENFANT_TRES_GRANDE;
+        case BULLE_GRANDE:      return (float) SCREEN_W / (float) DIVISEUR_VITESSE_ENFANT_GRANDE;
+        case BULLE_MOYENNE:     return (float) SCREEN_W / (float) DIVISEUR_VITESSE_ENFANT_MOYENNE;
+        case BULLE_PETITE:      return (float) SCREEN_W / (float) DIVISEUR_VITESSE_ENFANT_PETITE;
     }
-    return 3.0f;
+    return (float) SCREEN_W / (float) DIVISEUR_VITESSE_ENFANT_GRANDE;
 }
 
 /* --------------------------------------------------
@@ -216,20 +250,20 @@ int ajouter_bulle(Bulle bulles[], BITMAP *sprites[],
                   TailleBulle taille) {
     int idx = trouver_case_libre(bulles);
 
-    if (idx == -1) return -1;
+    if (idx == INDEX_INVALIDE) return INDEX_INVALIDE;
 
     configurer_bulle(&bulles[idx], taille, sprites);
     bulles[idx].x = x;
     bulles[idx].y = y;
     bulles[idx].vx = vx;
     bulles[idx].vy = vy;
-    bulles[idx].active = 1;
+    bulles[idx].active = VRAI;
 
     return idx;
 }
 
 /* --------------------------------------------------
-   Séparer une bulle en 2 bulles plus petites
+   Séparer une bulle en deux bulles plus petites
    Si elle est déjà petite => destruction
 -------------------------------------------------- */
 void separer_bulle(Bulle bulles[], BITMAP *sprites[], int index) {
@@ -239,37 +273,37 @@ void separer_bulle(Bulle bulles[], BITMAP *sprites[], int index) {
     float vxFille;
     BITMAP *spriteFille;
 
-    if (index < 0 || index >= MAX_BULLES) return;
+    if (index < VALEUR_NULLE || index >= MAX_BULLES) return;
     if (!bulles[index].active) return;
 
     source = bulles[index];
 
     if (source.taille == BULLE_PETITE) {
-        bulles[index].active = 0;
+        bulles[index].active = FAUX;
         return;
     }
 
-    nouvelleTaille = (TailleBulle)(source.taille + 1);
+    nouvelleTaille = (TailleBulle)(source.taille + INDEX_SUIVANT);
     spriteFille = sprites[(int)nouvelleTaille];
 
-    centreX = source.x + source.sprite->w / 2.0f;
-    centreY = source.y + source.sprite->h / 2.0f;
+    centreX = source.x + source.sprite->w / (float) DIVISEUR_CENTRE;
+    centreY = source.y + source.sprite->h / (float) DIVISEUR_CENTRE;
     vxFille = vitesse_horizontale_fille(nouvelleTaille);
 
-    bulles[index].active = 0;
+    bulles[index].active = FAUX;
 
     ajouter_bulle(bulles, sprites,
-                  centreX - spriteFille->w / 2.0f - 8,
-                  centreY - spriteFille->h / 2.0f,
+                  centreX - spriteFille->w / (float) DIVISEUR_CENTRE - (float) SCREEN_W / (float) DIVISEUR_CENT_VINGT_HUITIEME,
+                  centreY - spriteFille->h / (float) DIVISEUR_CENTRE,
                   -vxFille,
-                  0.0f,
+                  ZERO_FLOTTANT,
                   nouvelleTaille);
 
     ajouter_bulle(bulles, sprites,
-                  centreX - spriteFille->w / 2.0f + 8,
-                  centreY - spriteFille->h / 2.0f,
+                  centreX - spriteFille->w / (float) DIVISEUR_CENTRE + (float) SCREEN_W / (float) DIVISEUR_CENT_VINGT_HUITIEME,
+                  centreY - spriteFille->h / (float) DIVISEUR_CENTRE,
                   vxFille,
-                  0.0f,
+                  ZERO_FLOTTANT,
                   nouvelleTaille);
 }
 
@@ -295,13 +329,13 @@ void update_bulle(Bulle *b, int groundY) {
         b->vx *= b->attenuationX;
 
         /* vitesse horizontale minimum pour éviter qu'elle s'arrête */
-        if (b->vx > 0.0f && b->vx < 1.5f) b->vx = 1.5f;
-        if (b->vx < 0.0f && b->vx > -1.5f) b->vx = -1.5f;
+        if (b->vx > ZERO_FLOTTANT && b->vx < (float) SCREEN_W / (float) DIVISEUR_VITESSE_MIN_BULLE) b->vx = (float) SCREEN_W / (float) DIVISEUR_VITESSE_MIN_BULLE;
+        if (b->vx < ZERO_FLOTTANT && b->vx > -(float) SCREEN_W / (float) DIVISEUR_VITESSE_MIN_BULLE) b->vx = -(float) SCREEN_W / (float) DIVISEUR_VITESSE_MIN_BULLE;
     }
 
     /* rebond mur gauche */
-    if (b->x < 0) {
-        b->x = 0;
+    if (b->x < ZERO_FLOTTANT) {
+        b->x = ZERO_FLOTTANT;
         b->vx = -b->vx;
     }
 
@@ -317,7 +351,7 @@ void update_bulle(Bulle *b, int groundY) {
 -------------------------------------------------- */
 void update_bulles(Bulle bulles[], int groundY) {
     int i;
-    for (i = 0; i < MAX_BULLES; i++) {
+    for (i = INDEX_PREMIER; i < MAX_BULLES; i++) {
         update_bulle(&bulles[i], groundY);
     }
 }
@@ -327,11 +361,11 @@ void update_bulles(Bulle bulles[], int groundY) {
 -------------------------------------------------- */
 void draw_bulles(Bulle bulles[], BITMAP *buffer) {
     int i;
-    for (i = 0; i < MAX_BULLES; i++) {
+    for (i = INDEX_PREMIER; i < MAX_BULLES; i++) {
         if (!bulles[i].active) continue;
 
         masked_blit(bulles[i].sprite, buffer,
-                    0, 0,
+                    VALEUR_NULLE, VALEUR_NULLE,
                     (int)bulles[i].x, (int)bulles[i].y,
                     bulles[i].sprite->w, bulles[i].sprite->h);
     }
@@ -343,7 +377,7 @@ void draw_bulles(Bulle bulles[], BITMAP *buffer) {
 int collision_projectile_bulles(Bulle bulles[],
                                 int projX, int projY, int projW, int projH) {
     int i;
-    for (i = 0; i < MAX_BULLES; i++) {
+    for (i = INDEX_PREMIER; i < MAX_BULLES; i++) {
         if (!bulles[i].active) continue;
 
         if (collision_rect(projX, projY, projW, projH,
@@ -352,7 +386,7 @@ int collision_projectile_bulles(Bulle bulles[],
             return i;
         }
     }
-    return -1;
+    return INDEX_INVALIDE;
 }
 
 /* --------------------------------------------------
@@ -360,16 +394,16 @@ int collision_projectile_bulles(Bulle bulles[],
 -------------------------------------------------- */
 int check_player_collision(Bulle bulles[], int px, int py, int pw, int ph) {
     int i;
-    for (i = 0; i < MAX_BULLES; i++) {
+    for (i = INDEX_PREMIER; i < MAX_BULLES; i++) {
         if (!bulles[i].active) continue;
 
         if (collision_rect(px, py, pw, ph,
                            (int)bulles[i].x, (int)bulles[i].y,
                            bulles[i].sprite->w, bulles[i].sprite->h)) {
-            return 1;
+            return VRAI;
         }
     }
-    return 0;
+    return FAUX;
 }
 
 /* --------------------------------------------------
@@ -377,10 +411,10 @@ int check_player_collision(Bulle bulles[], int px, int py, int pw, int ph) {
 -------------------------------------------------- */
 int reste_des_bulles(Bulle bulles[]) {
     int i;
-    for (i = 0; i < MAX_BULLES; i++) {
-        if (bulles[i].active) return 1;
+    for (i = INDEX_PREMIER; i < MAX_BULLES; i++) {
+        if (bulles[i].active) return VRAI;
     }
-    return 0;
+    return FAUX;
 }
 
 /* --------------------------------------------------
@@ -388,21 +422,25 @@ int reste_des_bulles(Bulle bulles[]) {
 -------------------------------------------------- */
 void afficher_perdu(BITMAP *buffer) {
     rectfill(buffer,
-             SCREEN_W / 2 - 180, SCREEN_H / 2 - 50,
-             SCREEN_W / 2 + 180, SCREEN_H / 2 + 50,
-             makecol(0, 0, 0));
+             SCREEN_W / DIVISEUR_CENTRE - SCREEN_W / DIVISEUR_HUITIEME,
+             SCREEN_H / DIVISEUR_CENTRE - SCREEN_H / DIVISEUR_VINGT_DEUXIEME,
+             SCREEN_W / DIVISEUR_CENTRE + SCREEN_W / DIVISEUR_HUITIEME,
+             SCREEN_H / DIVISEUR_CENTRE + SCREEN_H / DIVISEUR_VINGT_DEUXIEME,
+             makecol(COULEUR_NOIR_R, COULEUR_NOIR_G, COULEUR_NOIR_B));
 
     rect(buffer,
-         SCREEN_W / 2 - 180, SCREEN_H / 2 - 50,
-         SCREEN_W / 2 + 180, SCREEN_H / 2 + 50,
-         makecol(255, 0, 0));
+         SCREEN_W / DIVISEUR_CENTRE - SCREEN_W / DIVISEUR_HUITIEME,
+         SCREEN_H / DIVISEUR_CENTRE - SCREEN_H / DIVISEUR_VINGT_DEUXIEME,
+         SCREEN_W / DIVISEUR_CENTRE + SCREEN_W / DIVISEUR_HUITIEME,
+         SCREEN_H / DIVISEUR_CENTRE + SCREEN_H / DIVISEUR_VINGT_DEUXIEME,
+         makecol(COULEUR_ROUGE_R, COULEUR_ROUGE_G, COULEUR_ROUGE_B));
 
     textout_centre_ex(buffer, font,
                       "PERDU",
-                      SCREEN_W / 2,
-                      SCREEN_H / 2 - 5,
-                      makecol(255, 0, 0),
-                      -1);
+                      SCREEN_W / DIVISEUR_CENTRE,
+                      SCREEN_H / DIVISEUR_CENTRE - text_height(font) / DIVISEUR_CENTRE,
+                      makecol(COULEUR_ROUGE_R, COULEUR_ROUGE_G, COULEUR_ROUGE_B),
+                      COULEUR_TRANSPARENTE_TEXTE);
 }
 
 /* --------------------------------------------------
@@ -410,21 +448,25 @@ void afficher_perdu(BITMAP *buffer) {
 -------------------------------------------------- */
 void afficher_gagne(BITMAP *buffer) {
     rectfill(buffer,
-             SCREEN_W / 2 - 220, SCREEN_H / 2 - 50,
-             SCREEN_W / 2 + 220, SCREEN_H / 2 + 50,
-             makecol(0, 0, 0));
+             SCREEN_W / DIVISEUR_CENTRE - SCREEN_W / DIVISEUR_SEPTIEME,
+             SCREEN_H / DIVISEUR_CENTRE - SCREEN_H / DIVISEUR_VINGT_DEUXIEME,
+             SCREEN_W / DIVISEUR_CENTRE + SCREEN_W / DIVISEUR_SEPTIEME,
+             SCREEN_H / DIVISEUR_CENTRE + SCREEN_H / DIVISEUR_VINGT_DEUXIEME,
+             makecol(COULEUR_NOIR_R, COULEUR_NOIR_G, COULEUR_NOIR_B));
 
     rect(buffer,
-         SCREEN_W / 2 - 220, SCREEN_H / 2 - 50,
-         SCREEN_W / 2 + 220, SCREEN_H / 2 + 50,
-         makecol(0, 255, 0));
+         SCREEN_W / DIVISEUR_CENTRE - SCREEN_W / DIVISEUR_SEPTIEME,
+         SCREEN_H / DIVISEUR_CENTRE - SCREEN_H / DIVISEUR_VINGT_DEUXIEME,
+         SCREEN_W / DIVISEUR_CENTRE + SCREEN_W / DIVISEUR_SEPTIEME,
+         SCREEN_H / DIVISEUR_CENTRE + SCREEN_H / DIVISEUR_VINGT_DEUXIEME,
+         makecol(COULEUR_VERT_R, COULEUR_VERT_G, COULEUR_VERT_B));
 
     textout_centre_ex(buffer, font,
                       "GAGNE - PLUS DE BULLES",
-                      SCREEN_W / 2,
-                      SCREEN_H / 2 - 5,
-                      makecol(0, 255, 0),
-                      -1);
+                      SCREEN_W / DIVISEUR_CENTRE,
+                      SCREEN_H / DIVISEUR_CENTRE - text_height(font) / DIVISEUR_CENTRE,
+                      makecol(COULEUR_VERT_R, COULEUR_VERT_G, COULEUR_VERT_B),
+                      COULEUR_TRANSPARENTE_TEXTE);
 }
 
 int main() {
@@ -432,7 +474,7 @@ int main() {
     BITMAP *player_orig = NULL;
     BITMAP *player = NULL;
     BITMAP *bulle_orig = NULL;
-    BITMAP *sprites[4] = {NULL, NULL, NULL, NULL};
+    BITMAP *sprites[VALEUR_QUADRUPLE] = {NULL, NULL, NULL, NULL};
     BITMAP *buffer = NULL;
 
     int groundY, leftLimit, rightLimit;
@@ -441,20 +483,23 @@ int main() {
     Bulle bulles[MAX_BULLES];
     int i;
 
-    int projectileActive = 0;
-    int projectileX = 0;
-    int projectileY = 0;
-    int projectileW = 8;
-    int projectileH = 20;
-    int projectileSpeed = 12;
-    int oldUpState = 0;
+    int projectileActive = FAUX;
+    int projectileX = VALEUR_NULLE;
+    int projectileY = VALEUR_NULLE;
+    int projectileW;
+    int projectileH;
+    int projectileSpeed;
+    int oldUpState = FAUX;
 
-    int perdu = 0;
-    int gagne = 0;
-    int idxTouchee = -1;
-    int largeurFenetre = 1536;
-    int hauteurFenetre = 1024;
-    char fondPath[512];
+    int perdu = FAUX;
+    int gagne = FAUX;
+    int idxTouchee = INDEX_INVALIDE;
+    int largeurReference = VALEUR_NULLE;
+    int hauteurReference = VALEUR_NULLE;
+    int largeurFenetre;
+    int hauteurFenetre;
+    int referenceSprites;
+    char fondPath[TAILLE_CHEMIN_RESSOURCE];
 
     srand((unsigned int)time(NULL));
 
@@ -463,11 +508,21 @@ int main() {
     -------------------------------------------------- */
     allegro_init();
     install_keyboard();
-    set_color_depth(32);
+    set_color_depth(PROFONDEUR_COULEUR_JEU);
     resoudre_chemin_ressource("test2.bmp", fondPath, sizeof(fondPath));
-    if (set_gfx_mode(GFX_AUTODETECT_WINDOWED, largeurFenetre, hauteurFenetre, 0, 0) != 0) {
+    if (get_desktop_resolution(&largeurReference, &hauteurReference) != VALEUR_NULLE ||
+        largeurReference <= VALEUR_NULLE ||
+        hauteurReference <= VALEUR_NULLE) {
+        if (!determiner_taille_bitmap(fondPath, &largeurReference, &hauteurReference)) {
+            allegro_message("Impossible de calculer une taille de fenetre relative");
+            return RETOUR_PROGRAMME_ERREUR;
+        }
+    }
+    largeurFenetre = largeurReference * JEU_FENETRE_LARGEUR_NUMERATEUR / JEU_FENETRE_RATIO_DENOMINATEUR;
+    hauteurFenetre = hauteurReference * JEU_FENETRE_HAUTEUR_NUMERATEUR / JEU_FENETRE_RATIO_DENOMINATEUR;
+    if (set_gfx_mode(GFX_AUTODETECT_WINDOWED, largeurFenetre, hauteurFenetre, VALEUR_NULLE, VALEUR_NULLE) != VALEUR_NULLE) {
         allegro_message("Erreur mode graphique");
-        return 1;
+        return RETOUR_PROGRAMME_ERREUR;
     }
 
     /* --------------------------------------------------
@@ -476,7 +531,7 @@ int main() {
     fond = load_bitmap(fondPath, NULL);
     if (!fond) {
         allegro_message("Impossible de charger %s", fondPath);
-        return 1;
+        return RETOUR_PROGRAMME_ERREUR;
     }
 
     /* --------------------------------------------------
@@ -486,17 +541,17 @@ int main() {
     if (!player_orig) {
         destroy_bitmap(fond);
         allegro_message("Impossible de charger hary.bmp");
-        return 1;
+        return RETOUR_PROGRAMME_ERREUR;
     }
 
-    player = resize_bitmap(player_orig, 0.25f);
+    player = resize_bitmap_hauteur_relative_test(player_orig, SCREEN_H, DIVISEUR_REDIMENSION_JOUEUR);
     destroy_bitmap(player_orig);
     player_orig = NULL;
 
     if (!player) {
         destroy_bitmap(fond);
         allegro_message("Erreur resize personnage");
-        return 1;
+        return RETOUR_PROGRAMME_ERREUR;
     }
 
     /* --------------------------------------------------
@@ -507,28 +562,29 @@ int main() {
         destroy_bitmap(fond);
         destroy_bitmap(player);
         allegro_message("Impossible de charger vifdor2.bmp");
-        return 1;
+        return RETOUR_PROGRAMME_ERREUR;
     }
 
     /* tailles */
-    sprites[BULLE_TRES_GRANDE] = resize_bitmap(bulle_orig, 0.22f);
-    sprites[BULLE_GRANDE]      = resize_bitmap(bulle_orig, 0.17f);
-    sprites[BULLE_MOYENNE]     = resize_bitmap(bulle_orig, 0.12f);
-    sprites[BULLE_PETITE]      = resize_bitmap(bulle_orig, 0.08f);
+    referenceSprites = plus_petite_dimension_test(SCREEN_W, SCREEN_H);
+    sprites[BULLE_TRES_GRANDE] = resize_bitmap_hauteur_relative_test(bulle_orig, referenceSprites, DIVISEUR_REDIMENSION_BULLE_TRES_GRANDE);
+    sprites[BULLE_GRANDE]      = resize_bitmap_hauteur_relative_test(bulle_orig, referenceSprites, DIVISEUR_REDIMENSION_BULLE_GRANDE);
+    sprites[BULLE_MOYENNE]     = resize_bitmap_hauteur_relative_test(bulle_orig, referenceSprites, DIVISEUR_REDIMENSION_BULLE_MOYENNE);
+    sprites[BULLE_PETITE]      = resize_bitmap_hauteur_relative_test(bulle_orig, referenceSprites, DIVISEUR_REDIMENSION_BULLE_PETITE);
 
     destroy_bitmap(bulle_orig);
     bulle_orig = NULL;
 
-    for (i = 0; i < 4; i++) {
+    for (i = INDEX_PREMIER; i < VALEUR_QUADRUPLE; i++) {
         if (!sprites[i]) {
             int j;
-            for (j = 0; j < 4; j++) {
+            for (j = INDEX_PREMIER; j < VALEUR_QUADRUPLE; j++) {
                 if (sprites[j]) destroy_bitmap(sprites[j]);
             }
             destroy_bitmap(fond);
             destroy_bitmap(player);
             allegro_message("Erreur resize des bulles");
-            return 1;
+            return RETOUR_PROGRAMME_ERREUR;
         }
     }
 
@@ -537,49 +593,64 @@ int main() {
     -------------------------------------------------- */
     buffer = create_bitmap(SCREEN_W, SCREEN_H);
     if (!buffer) {
-        for (i = 0; i < 4; i++) destroy_bitmap(sprites[i]);
+        for (i = INDEX_PREMIER; i < VALEUR_QUADRUPLE; i++) destroy_bitmap(sprites[i]);
         destroy_bitmap(player);
         destroy_bitmap(fond);
         allegro_message("Impossible de creer le buffer");
-        return 1;
+        return RETOUR_PROGRAMME_ERREUR;
     }
 
     /* --------------------------------------------------
        Terrain
     -------------------------------------------------- */
-    groundY = SCREEN_H - 120;
-    leftLimit = 0;
+    groundY = SCREEN_H - SCREEN_H / DIVISEUR_HAUTEUR_SOL;
+    leftLimit = VALEUR_NULLE;
     rightLimit = SCREEN_W;
 
     /* --------------------------------------------------
        Joueur
     -------------------------------------------------- */
-    x = SCREEN_W / 2 - player->w / 2;
+    x = SCREEN_W / DIVISEUR_CENTRE - player->w / DIVISEUR_CENTRE;
     y = groundY - player->h;
-    speed = 6;
+    speed = SCREEN_W / DIVISEUR_VITESSE_JOUEUR;
+    if (speed < VALEUR_UNITAIRE) {
+        speed = VALEUR_UNITAIRE;
+    }
+    projectileW = SCREEN_W / DIVISEUR_LARGEUR_PROJECTILE;
+    if (projectileW < VALEUR_UNITAIRE) {
+        projectileW = VALEUR_UNITAIRE;
+    }
+    projectileH = SCREEN_H / DIVISEUR_HAUTEUR_PROJECTILE;
+    if (projectileH < VALEUR_UNITAIRE) {
+        projectileH = VALEUR_UNITAIRE;
+    }
+    projectileSpeed = SCREEN_H / DIVISEUR_VITESSE_PROJECTILE;
+    if (projectileSpeed < VALEUR_UNITAIRE) {
+        projectileSpeed = VALEUR_UNITAIRE;
+    }
 
     /* --------------------------------------------------
        Initialisation bulles
     -------------------------------------------------- */
-    for (i = 0; i < MAX_BULLES; i++) {
-        bulles[i].active = 0;
-        bulles[i].x = 0;
-        bulles[i].y = 0;
-        bulles[i].vx = 0;
-        bulles[i].vy = 0;
+    for (i = INDEX_PREMIER; i < MAX_BULLES; i++) {
+        bulles[i].active = FAUX;
+        bulles[i].x = ZERO_FLOTTANT;
+        bulles[i].y = ZERO_FLOTTANT;
+        bulles[i].vx = ZERO_FLOTTANT;
+        bulles[i].vy = ZERO_FLOTTANT;
         bulles[i].taille = BULLE_PETITE;
-        bulles[i].gravite = 0;
-        bulles[i].rebondSol = 0;
-        bulles[i].attenuationX = 1.0f;
+        bulles[i].gravite = ZERO_FLOTTANT;
+        bulles[i].rebondSol = ZERO_FLOTTANT;
+        bulles[i].attenuationX = (float) VALEUR_UNITAIRE;
         bulles[i].sprite = NULL;
     }
 
     /* une bulle de départ */
     ajouter_bulle(bulles, sprites,
-                  SCREEN_W - 320.0f,
-                  80.0f,
-                  -3.2f,
-                  0.0f,
+                  SCREEN_W * POSITION_X_NIVEAU_1,
+                  SCREEN_H * POSITION_Y_NIVEAU_1,
+                  -(float) SCREEN_W / (float) DIVISEUR_VITESSE_NIVEAU_1,
+                  ZERO_FLOTTANT,
                   BULLE_TRES_GRANDE);
 
     /* --------------------------------------------------
@@ -599,8 +670,8 @@ int main() {
 
             /* tir flèche haut */
             if (key[KEY_UP] && !oldUpState && !projectileActive) {
-                projectileActive = 1;
-                projectileX = x + player->w / 2 - projectileW / 2;
+                projectileActive = VRAI;
+                projectileX = x + player->w / DIVISEUR_CENTRE - projectileW / DIVISEUR_CENTRE;
                 projectileY = y;
             }
             oldUpState = key[KEY_UP];
@@ -609,8 +680,8 @@ int main() {
             if (projectileActive) {
                 projectileY -= projectileSpeed;
 
-                if (projectileY + projectileH < 0) {
-                    projectileActive = 0;
+                if (projectileY + projectileH < VALEUR_NULLE) {
+                    projectileActive = FAUX;
                 }
             }
 
@@ -622,44 +693,44 @@ int main() {
                 idxTouchee = collision_projectile_bulles(bulles,
                                                         projectileX, projectileY,
                                                         projectileW, projectileH);
-                if (idxTouchee != -1) {
-                    projectileActive = 0;
+                if (idxTouchee != INDEX_INVALIDE) {
+                    projectileActive = FAUX;
                     separer_bulle(bulles, sprites, idxTouchee);
                 }
             }
 
             /* collision joueur / bulles */
             if (check_player_collision(bulles, x, y, player->w, player->h)) {
-                perdu = 1;
+                perdu = VRAI;
             }
 
             /* victoire */
             if (!reste_des_bulles(bulles)) {
-                gagne = 1;
+                gagne = VRAI;
             }
         }
 
         /* --------------------------------------------------
            Dessin
         -------------------------------------------------- */
-        clear_to_color(buffer, makecol(0, 0, 0));
+        clear_to_color(buffer, makecol(COULEUR_NOIR_R, COULEUR_NOIR_G, COULEUR_NOIR_B));
 
         stretch_blit(fond, buffer,
-                     0, 0, fond->w, fond->h,
-                     0, 0, SCREEN_W, SCREEN_H);
+                     VALEUR_NULLE, VALEUR_NULLE, fond->w, fond->h,
+                     VALEUR_NULLE, VALEUR_NULLE, SCREEN_W, SCREEN_H);
 
         /* sol */
         rectfill(buffer,
-                 0, groundY,
+                 VALEUR_NULLE, groundY,
                  SCREEN_W, SCREEN_H,
-                 makecol(70, 120, 55));
+                 makecol(COULEUR_SOL_R, COULEUR_SOL_G, COULEUR_SOL_B));
 
         /* bulles */
         draw_bulles(bulles, buffer);
 
         /* joueur */
         masked_blit(player, buffer,
-                    0, 0,
+                    VALEUR_NULLE, VALEUR_NULLE,
                     x, y,
                     player->w, player->h);
 
@@ -670,15 +741,15 @@ int main() {
                      projectileY,
                      projectileX + projectileW,
                      projectileY + projectileH,
-                     makecol(255, 230, 120));
+                     makecol(COULEUR_HUD_AURA_ACTIVE_R, COULEUR_OPTION_SELECTION_FOND_R, COULEUR_HUD_AURA_ACTIVE_B));
         }
 
         /* messages */
         if (perdu) afficher_perdu(buffer);
         if (gagne) afficher_gagne(buffer);
 
-        blit(buffer, screen, 0, 0, 0, 0, SCREEN_W, SCREEN_H);
-        rest(16);
+        blit(buffer, screen, VALEUR_NULLE, VALEUR_NULLE, VALEUR_NULLE, VALEUR_NULLE, SCREEN_W, SCREEN_H);
+        rest(DUREE_UNE_IMAGE_MS);
     }
 
     /* --------------------------------------------------
@@ -686,13 +757,13 @@ int main() {
     -------------------------------------------------- */
     destroy_bitmap(buffer);
 
-    for (i = 0; i < 4; i++) {
+    for (i = INDEX_PREMIER; i < VALEUR_QUADRUPLE; i++) {
         destroy_bitmap(sprites[i]);
     }
 
     destroy_bitmap(player);
     destroy_bitmap(fond);
 
-    return 0;
+    return RETOUR_PROGRAMME_OK;
 }
 END_OF_MAIN();

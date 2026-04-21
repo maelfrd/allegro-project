@@ -4,7 +4,7 @@
 #include <string.h>
 
 enum {
-    MENU_NOUVELLE_PARTIE = 0,
+    MENU_NOUVELLE_PARTIE,
     MENU_REPRENDRE_PARTIE,
     MENU_QUITTER,
     MENU_PARAMETRES,
@@ -13,7 +13,7 @@ enum {
 };
 
 enum {
-    PARAM_MODE_DEMO = 0,
+    PARAM_MODE_DEMO,
     PARAM_DEMO_NIVEAU_1,
     PARAM_DEMO_NIVEAU_2,
     PARAM_DEMO_NIVEAU_3,
@@ -25,20 +25,21 @@ enum {
 static int caractere_pseudo_valide(int caractere) {
     return ((caractere >= 'a' && caractere <= 'z') ||
             (caractere >= 'A' && caractere <= 'Z') ||
-            (caractere >= '0' && caractere <= '9') ||
+            (caractere >= CARACTERE_CHIFFRE_MIN && caractere <= CARACTERE_CHIFFRE_MAX) ||
             caractere == '_' ||
             caractere == '-');
 }
 
 static void reinitialiser_actions_navigation(ActionsIHM *actions) {
-    actions->nouvellePartie = 0;
-    actions->reprendrePartie = 0;
-    actions->ouvrirParametres = 0;
-    actions->ouvrirRegles = 0;
-    actions->retourMenu = 0;
-    actions->valider = 0;
-    actions->basculerModeDemonstration = 0;
-    actions->lancerDemoNiveau = 0;
+    actions->nouvellePartie = FAUX;
+    actions->reprendrePartie = FAUX;
+    actions->ouvrirParametres = FAUX;
+    actions->ouvrirRegles = FAUX;
+    actions->retourMenu = FAUX;
+    actions->valider = FAUX;
+    actions->niveauChoisi = VALEUR_NULLE;
+    actions->basculerModeDemonstration = FAUX;
+    actions->lancerDemoNiveau = VALEUR_NULLE;
 }
 
 void initialiser_actions_ihm(ActionsIHM *actions) {
@@ -46,9 +47,10 @@ void initialiser_actions_ihm(ActionsIHM *actions) {
         return;
     }
 
-    memset(actions, 0, sizeof(*actions));
+    memset(actions, VALEUR_NULLE, sizeof(*actions));
     actions->menuSelection = MENU_NOUVELLE_PARTIE;
     actions->parametresSelection = PARAM_MODE_DEMO;
+    actions->niveauSelection = INDEX_PREMIER;
 }
 
 void traiter_ihm_menu(ActionsIHM *actions, int repriseDisponible) {
@@ -56,49 +58,49 @@ void traiter_ihm_menu(ActionsIHM *actions, int repriseDisponible) {
         return;
     }
 
-    actions->quitter = 0;
-    actions->sauvegarder = 0;
-    actions->charger = 0;
+    actions->quitter = FAUX;
+    actions->sauvegarder = FAUX;
+    actions->charger = FAUX;
     reinitialiser_actions_navigation(actions);
 
     if (key[KEY_UP] && !actions->toucheHautMenuPrecedente) {
         actions->menuSelection--;
-        if (actions->menuSelection < 0) {
-            actions->menuSelection = MENU_TOTAL - 1;
+        if (actions->menuSelection < VALEUR_NULLE) {
+            actions->menuSelection = MENU_TOTAL - INDEX_SUIVANT;
         }
     }
 
     if (key[KEY_DOWN] && !actions->toucheBasMenuPrecedente) {
         actions->menuSelection++;
         if (actions->menuSelection >= MENU_TOTAL) {
-            actions->menuSelection = 0;
+            actions->menuSelection = MENU_NOUVELLE_PARTIE;
         }
     }
 
     if (key[KEY_ENTER] && !actions->toucheEntreeMenuPrecedente) {
         switch (actions->menuSelection) {
             case MENU_NOUVELLE_PARTIE:
-                actions->nouvellePartie = 1;
+                actions->nouvellePartie = VRAI;
                 break;
             case MENU_REPRENDRE_PARTIE:
                 if (repriseDisponible) {
-                    actions->reprendrePartie = 1;
+                    actions->reprendrePartie = VRAI;
                 }
                 break;
             case MENU_QUITTER:
-                actions->quitter = 1;
+                actions->quitter = VRAI;
                 break;
             case MENU_PARAMETRES:
-                actions->ouvrirParametres = 1;
+                actions->ouvrirParametres = VRAI;
                 break;
             case MENU_REGLES:
-                actions->ouvrirRegles = 1;
+                actions->ouvrirRegles = VRAI;
                 break;
         }
     }
 
     if (key[KEY_ESC]) {
-        actions->quitter = 1;
+        actions->quitter = VRAI;
     }
 
     actions->toucheHautMenuPrecedente = key[KEY_UP];
@@ -112,13 +114,13 @@ void traiter_ihm_ecran_secondaire(ActionsIHM *actions) {
         return;
     }
 
-    actions->quitter = 0;
-    actions->sauvegarder = 0;
-    actions->charger = 0;
+    actions->quitter = FAUX;
+    actions->sauvegarder = FAUX;
+    actions->charger = FAUX;
     reinitialiser_actions_navigation(actions);
 
     if ((key[KEY_ESC] || key[KEY_BACKSPACE]) && !actions->toucheRetourPrecedente) {
-        actions->retourMenu = 1;
+        actions->retourMenu = VRAI;
     }
 
     actions->toucheRetourPrecedente = key[KEY_ESC] || key[KEY_BACKSPACE];
@@ -128,20 +130,20 @@ void traiter_ihm_ecran_secondaire(ActionsIHM *actions) {
 }
 
 void traiter_ihm_parametres(ActionsIHM *actions, int modeDemonstrationActif) {
-    int selectionMax = modeDemonstrationActif ? PARAM_RETOUR : PARAM_MODE_DEMO + 1;
+    int selectionMax = modeDemonstrationActif ? PARAM_RETOUR : PARAM_MODE_DEMO + INDEX_SUIVANT;
 
     if (!actions) {
         return;
     }
 
-    actions->quitter = 0;
-    actions->sauvegarder = 0;
-    actions->charger = 0;
+    actions->quitter = FAUX;
+    actions->sauvegarder = FAUX;
+    actions->charger = FAUX;
     reinitialiser_actions_navigation(actions);
 
     if (key[KEY_UP] && !actions->toucheHautMenuPrecedente) {
         actions->parametresSelection--;
-        if (actions->parametresSelection < 0) {
+        if (actions->parametresSelection < VALEUR_NULLE) {
             actions->parametresSelection = selectionMax;
         }
     }
@@ -149,42 +151,95 @@ void traiter_ihm_parametres(ActionsIHM *actions, int modeDemonstrationActif) {
     if (key[KEY_DOWN] && !actions->toucheBasMenuPrecedente) {
         actions->parametresSelection++;
         if (actions->parametresSelection > selectionMax) {
-            actions->parametresSelection = 0;
+            actions->parametresSelection = PARAM_MODE_DEMO;
         }
     }
 
-    if (!modeDemonstrationActif && actions->parametresSelection > PARAM_MODE_DEMO + 1) {
+    if (!modeDemonstrationActif && actions->parametresSelection > PARAM_MODE_DEMO + INDEX_SUIVANT) {
         actions->parametresSelection = PARAM_MODE_DEMO;
     }
 
     if (key[KEY_ENTER] && !actions->toucheEntreeMenuPrecedente) {
         switch (actions->parametresSelection) {
             case PARAM_MODE_DEMO:
-                actions->basculerModeDemonstration = 1;
+                actions->basculerModeDemonstration = VRAI;
                 break;
             case PARAM_DEMO_NIVEAU_1:
-                actions->lancerDemoNiveau = 1;
+                actions->lancerDemoNiveau = PREMIER_NIVEAU_JEU;
                 break;
             case PARAM_DEMO_NIVEAU_2:
-                actions->lancerDemoNiveau = 2;
+                actions->lancerDemoNiveau = VALEUR_DOUBLE;
                 break;
             case PARAM_DEMO_NIVEAU_3:
-                actions->lancerDemoNiveau = 3;
+                actions->lancerDemoNiveau = VALEUR_TRIPLE;
                 break;
             case PARAM_DEMO_NIVEAU_4:
-                actions->lancerDemoNiveau = 4;
+                actions->lancerDemoNiveau = VALEUR_QUADRUPLE;
                 break;
             case PARAM_DEMO_NIVEAU_5:
-                actions->lancerDemoNiveau = 5;
+                actions->lancerDemoNiveau = VALEUR_QUINTUPLE;
                 break;
             case PARAM_RETOUR:
-                actions->retourMenu = 1;
+                actions->retourMenu = VRAI;
                 break;
         }
     }
 
     if ((key[KEY_ESC] || key[KEY_BACKSPACE]) && !actions->toucheRetourPrecedente) {
-        actions->retourMenu = 1;
+        actions->retourMenu = VRAI;
+    }
+
+    actions->toucheRetourPrecedente = key[KEY_ESC] || key[KEY_BACKSPACE];
+    actions->toucheHautMenuPrecedente = key[KEY_UP];
+    actions->toucheBasMenuPrecedente = key[KEY_DOWN];
+    actions->toucheEntreeMenuPrecedente = key[KEY_ENTER];
+}
+
+void traiter_ihm_selection_niveau(ActionsIHM *actions, int niveauMaximumDebloque) {
+    int selectionMax;
+
+    if (!actions) {
+        return;
+    }
+
+    if (niveauMaximumDebloque < PREMIER_NIVEAU_JEU) {
+        niveauMaximumDebloque = PREMIER_NIVEAU_JEU;
+    }
+
+    actions->quitter = FAUX;
+    actions->sauvegarder = FAUX;
+    actions->charger = FAUX;
+    reinitialiser_actions_navigation(actions);
+
+    selectionMax = niveauMaximumDebloque;
+    if (actions->niveauSelection > selectionMax) {
+        actions->niveauSelection = selectionMax;
+    }
+
+    if (key[KEY_UP] && !actions->toucheHautMenuPrecedente) {
+        actions->niveauSelection--;
+        if (actions->niveauSelection < VALEUR_NULLE) {
+            actions->niveauSelection = selectionMax;
+        }
+    }
+
+    if (key[KEY_DOWN] && !actions->toucheBasMenuPrecedente) {
+        actions->niveauSelection++;
+        if (actions->niveauSelection > selectionMax) {
+            actions->niveauSelection = INDEX_PREMIER;
+        }
+    }
+
+    if (key[KEY_ENTER] && !actions->toucheEntreeMenuPrecedente) {
+        if (actions->niveauSelection < niveauMaximumDebloque) {
+            actions->niveauChoisi = actions->niveauSelection + INDEX_SUIVANT;
+        } else {
+            actions->retourMenu = VRAI;
+        }
+    }
+
+    if ((key[KEY_ESC] || key[KEY_BACKSPACE]) && !actions->toucheRetourPrecedente) {
+        actions->retourMenu = VRAI;
     }
 
     actions->toucheRetourPrecedente = key[KEY_ESC] || key[KEY_BACKSPACE];
@@ -200,31 +255,31 @@ void traiter_ihm_jeu(ActionsIHM *actions, CommandesJeu *commandes, int partieBlo
 
     initialiser_commandes_jeu(commandes);
     actions->quitter = key[KEY_ESC];
-    actions->sauvegarder = 0;
-    actions->charger = 0;
-    actions->retourMenu = 0;
-    actions->valider = 0;
+    actions->sauvegarder = FAUX;
+    actions->charger = FAUX;
+    actions->retourMenu = FAUX;
+    actions->valider = FAUX;
 
     if (!partieBloquee) {
         if (key[KEY_LEFT]) {
-            commandes->deplacementHorizontal = -1;
+            commandes->deplacementHorizontal = -VALEUR_UNITAIRE;
         } else if (key[KEY_RIGHT]) {
-            commandes->deplacementHorizontal = 1;
+            commandes->deplacementHorizontal = VALEUR_UNITAIRE;
         }
 
         if (key[KEY_UP] && !actions->toucheTirPrecedente) {
-            commandes->tirer = 1;
+            commandes->tirer = VRAI;
         }
     }
 
     if (key[KEY_S] && !actions->toucheSauvegardePrecedente) {
-        actions->sauvegarder = 1;
+        actions->sauvegarder = VRAI;
     }
     if (key[KEY_L] && !actions->toucheChargementPrecedente) {
-        actions->charger = 1;
+        actions->charger = VRAI;
     }
     if (partieBloquee && key[KEY_ENTER] && !actions->toucheEntreeJeuPrecedente) {
-        actions->retourMenu = 1;
+        actions->retourMenu = VRAI;
     }
 
     actions->toucheSauvegardePrecedente = key[KEY_S];
@@ -237,46 +292,46 @@ void traiter_ihm_jeu(ActionsIHM *actions, CommandesJeu *commandes, int partieBlo
 void traiter_ihm_saisie_pseudo(ActionsIHM *actions, char *pseudo, int taillePseudo) {
     int longueur;
 
-    if (!actions || !pseudo || taillePseudo <= 1) {
+    if (!actions || !pseudo || taillePseudo <= VALEUR_UNITAIRE) {
         return;
     }
 
-    actions->quitter = 0;
-    actions->sauvegarder = 0;
-    actions->charger = 0;
+    actions->quitter = FAUX;
+    actions->sauvegarder = FAUX;
+    actions->charger = FAUX;
     reinitialiser_actions_navigation(actions);
 
     longueur = (int) strlen(pseudo);
 
     while (keypressed()) {
         int touche = readkey();
-        int code = touche >> 8;
-        int ascii = touche & 0xff;
+        int code = touche >> CODE_BITS_TOUCHE;
+        int ascii = touche & MASQUE_ASCII_TOUCHE;
 
         if (code == KEY_ESC) {
-            actions->retourMenu = 1;
+            actions->retourMenu = VRAI;
             return;
         }
 
         if (code == KEY_ENTER) {
-            if (longueur > 0) {
-                actions->valider = 1;
+            if (longueur > VALEUR_NULLE) {
+                actions->valider = VRAI;
             }
             continue;
         }
 
         if (code == KEY_BACKSPACE) {
-            if (longueur > 0) {
+            if (longueur > VALEUR_NULLE) {
                 longueur--;
-                pseudo[longueur] = '\0';
+                pseudo[longueur] = CARACTERE_FIN_CHAINE;
             }
             continue;
         }
 
-        if (caractere_pseudo_valide(ascii) && longueur < taillePseudo - 1) {
+        if (caractere_pseudo_valide(ascii) && longueur < taillePseudo - INDEX_SUIVANT) {
             pseudo[longueur] = (char) ascii;
             longueur++;
-            pseudo[longueur] = '\0';
+            pseudo[longueur] = CARACTERE_FIN_CHAINE;
         }
     }
 }

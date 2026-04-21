@@ -2,7 +2,7 @@
 
 int initialiser_bulles(BITMAP **sprite_bulle, const char *sprite_path) {
     if (!sprite_bulle) {
-        return 0;
+        return FAUX;
     }
 
     *sprite_bulle = charger_bitmap_ou_erreur(sprite_path);

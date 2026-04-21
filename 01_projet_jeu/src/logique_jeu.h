@@ -1,10 +1,10 @@
 #ifndef LOGIQUE_JEU_H
 #define LOGIQUE_JEU_H
 
-#define TAILLE_PSEUDO_MAX 32
+#include "config_jeu.h"
 
 typedef enum {
-    BULLE_TRES_GRANDE = 0,
+    BULLE_TRES_GRANDE,
     BULLE_GRANDE,
     BULLE_MOYENNE,
     BULLE_PETITE,
@@ -12,7 +12,7 @@ typedef enum {
 } TailleBulle;
 
 typedef enum {
-    ENTITE_MANGE_MORT = 0,
+    ENTITE_MANGE_MORT,
     ENTITE_VIF_DOR,
     ENTITE_VOL_DE_MORT
 } TypeEntite;
@@ -93,6 +93,7 @@ typedef struct {
     int perdu;
     int gagne;
     int score;
+    int tempsRestantNiveauMs;
     char pseudo[TAILLE_PSEUDO_MAX];
 } EtatJeu;
 
