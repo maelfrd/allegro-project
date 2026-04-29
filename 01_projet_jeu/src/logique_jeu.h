@@ -18,12 +18,12 @@ typedef enum {
 } TypeEntite;
 
 typedef struct {
-    float x;
-    float y;
-    float vx;
-    float vy;
-    TypeEntite type;
-    TailleBulle taille;
+    float positionBulleX;
+    float positionBulleY;
+    float vitesseBulleX;
+    float vitesseBulleY;
+    TypeEntite typeEntite;
+    TailleBulle tailleBulle;
     float gravite;
     float rebondSol;
     float attenuationX;
@@ -35,9 +35,9 @@ typedef struct {
 typedef struct {
     int largeurFenetre;
     int hauteurFenetre;
-    int groundY;
-    int leftLimit;
-    int rightLimit;
+    int positionSolY;
+    int limiteGaucheTerrain;
+    int limiteDroiteTerrain;
     int vitesseJoueur;
     int joueurLargeur;
     int joueurHauteur;
@@ -58,52 +58,52 @@ typedef struct {
 } CommandesJeu;
 
 typedef struct {
-    Bulle *bulles;
-    int nbBulles;
-    int capaciteBulles;
-    int niveau;
+    Bulle *bullesEnJeu;
+    int nombreBulles;
+    int capaciteMaxBullesEnJeu;
+    int niveauActuel;
     int niveauMaximum;
-    int groundY;
-    int leftLimit;
-    int rightLimit;
-    int x;
-    int y;
-    int speed;
-    int projectileActive;
-    int projectileX;
-    int projectileY;
-    int projectileW;
-    int projectileH;
-    int projectileSpeed;
-    int chapeauVisible;
-    int chapeauX;
-    int chapeauY;
-    int chapeauW;
-    int chapeauH;
-    float chapeauVx;
-    float chapeauVy;
-    int explosionActive;
-    int explosionX;
-    int explosionY;
-    int explosionW;
-    int explosionH;
-    int explosionTimer;
-    int auraArdenteActive;
+    int positionSolY;
+    int limiteGaucheTerrain;
+    int limiteDroiteTerrain;
+    int positionJoueurX;
+    int positionJoueurY;
+    int vitesseJoueur;
+    int projectileEstActif;
+    int positionProjectileX;
+    int positionProjectileY;
+    int largeurProjectile;
+    int hauteurProjectile;
+    int vitesseProjectile;
+    int chapeauEstVisible;
+    int positionChapeauX;
+    int positionChapeauY;
+    int largeurChapeau;
+    int hauteurChapeau;
+    float vitesseChapeauX;
+    float vitesseChapeauY;
+    int explosionEstActive;
+    int positionExplosionX;
+    int positionExplosionY;
+    int largeurExplosion;
+    int hauteurExplosion;
+    int dureeExplosionRestanteImages;
+    int auraArdenteEstActive;
     int dureeRestanteAuraArdenteMs;
-    int perdu;
-    int gagne;
-    int score;
+    int partiePerdue;
+    int partieGagnee;
+    int scoreJoueur;
     int tempsRestantNiveauMs;
-    char pseudo[TAILLE_PSEUDO_MAX];
+    char pseudoJoueur[TAILLE_PSEUDO_MAX];
 } EtatJeu;
 
-int initialiser_logique_jeu(EtatJeu *etat, const ConfigurationJeu *configuration);
-int reinitialiser_partie(EtatJeu *etat, const ConfigurationJeu *configuration, int niveau);
-void definir_pseudo_joueur(EtatJeu *etat, const char *pseudo);
+int initialiser_logique_jeu(EtatJeu *etatJeu, const ConfigurationJeu *configuration);
+int reinitialiser_partie(EtatJeu *etatJeu, const ConfigurationJeu *configuration, int niveauActuel);
+void definir_pseudo_joueur(EtatJeu *etatJeu, const char *pseudoJoueur);
 void initialiser_commandes_jeu(CommandesJeu *commandes);
-void mettre_a_jour_logique_jeu(EtatJeu *etat,
+void mettre_a_jour_logique_jeu(EtatJeu *etatJeu,
                                const ConfigurationJeu *configuration,
                                const CommandesJeu *commandes);
-void fermer_logique_jeu(EtatJeu *etat);
+void fermer_logique_jeu(EtatJeu *etatJeu);
 
 #endif

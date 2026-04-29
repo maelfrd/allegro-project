@@ -31,7 +31,7 @@ static int plus_petite_dimension(int largeur, int hauteur) {
     return largeur < hauteur ? largeur : hauteur;
 }
 
-static int dimension_relative(int reference, int numerateur, int denominateur) {
+static int dimension_relative_proportionnelle(int reference, int numerateur, int denominateur) {
     int valeur;
 
     if (reference <= VALEUR_NULLE || numerateur <= VALEUR_NULLE || denominateur <= VALEUR_NULLE) {
@@ -47,10 +47,10 @@ static int dimension_relative(int reference, int numerateur, int denominateur) {
 }
 
 static int dimension_relative_zone(const BITMAP *bitmap, int numerateur, int denominateur) {
-    return dimension_relative(plus_petite_dimension(obtenir_largeur_zone_dessin(bitmap),
-                                                    obtenir_hauteur_zone_dessin(bitmap)),
-                              numerateur,
-                              denominateur);
+    return dimension_relative_proportionnelle(plus_petite_dimension(obtenir_largeur_zone_dessin(bitmap),
+                                                                    obtenir_hauteur_zone_dessin(bitmap)),
+                                              numerateur,
+                                              denominateur);
 }
 
 static void afficher_buffer_a_l_ecran(BITMAP *buffer) {
@@ -62,11 +62,11 @@ static void afficher_buffer_a_l_ecran(BITMAP *buffer) {
 }
 
 static void initialiser_ressources_vides(RessourcesJeu *ressources) {
-    int i;
+    int indexElement;
 
     ressources->fond = NULL;
-    for (i = INDEX_PREMIER; i < NOMBRE_FONDS_NIVEAUX; i++) {
-        ressources->fondsNiveaux[i] = NULL;
+    for (indexElement = INDEX_PREMIER; indexElement < NOMBRE_FONDS_NIVEAUX; indexElement++) {
+        ressources->fondsNiveaux[indexElement] = NULL;
     }
     ressources->player = NULL;
     ressources->tir = NULL;
@@ -74,10 +74,10 @@ static void initialiser_ressources_vides(RessourcesJeu *ressources) {
     ressources->chapeau = NULL;
     ressources->explosion = NULL;
     ressources->buffer = NULL;
-    for (i = INDEX_PREMIER; i < BULLE_TAILLES_TOTAL; i++) {
-        ressources->sprites[i] = NULL;
-        ressources->spritesVifDor[i] = NULL;
-        ressources->spritesVolDeMort[i] = NULL;
+    for (indexElement = INDEX_PREMIER; indexElement < BULLE_TAILLES_TOTAL; indexElement++) {
+        ressources->sprites[indexElement] = NULL;
+        ressources->spritesVifDor[indexElement] = NULL;
+        ressources->spritesVolDeMort[indexElement] = NULL;
     }
 }
 
@@ -128,13 +128,13 @@ static void afficher_message_centre(BITMAP *buffer,
                       COULEUR_TRANSPARENTE_TEXTE);
 }
 
-static BITMAP *obtenir_fond_niveau(const RessourcesJeu *ressources, int niveau) {
+static BITMAP *obtenir_fond_niveau(const RessourcesJeu *ressources, int niveauActuel) {
     if (!ressources) {
         return NULL;
     }
 
-    if (niveau >= PREMIER_NIVEAU_JEU && niveau <= NOMBRE_FONDS_NIVEAUX && ressources->fondsNiveaux[niveau - INDEX_SUIVANT]) {
-        return ressources->fondsNiveaux[niveau - INDEX_SUIVANT];
+    if (niveauActuel >= PREMIER_NIVEAU_JEU && niveauActuel <= NOMBRE_FONDS_NIVEAUX && ressources->fondsNiveaux[niveauActuel - INDEX_SUIVANT]) {
+        return ressources->fondsNiveaux[niveauActuel - INDEX_SUIVANT];
     }
 
     return ressources->fond;
@@ -240,17 +240,17 @@ static void dessiner_texte_centre_aggrandi(BITMAP *buffer,
     destroy_bitmap(texteBitmap);
 }
 
-static void dessiner_scene_jeu(BITMAP *buffer, const RessourcesJeu *ressources, const EtatJeu *etat) {
-    int i;
+static void dessiner_scene_jeu(BITMAP *buffer, const RessourcesJeu *ressources, const EtatJeu *etatJeu) {
+    int indexElement;
     BITMAP *fond;
     int largeurZoneDessin = obtenir_largeur_zone_dessin(buffer);
     int hauteurZoneDessin = obtenir_hauteur_zone_dessin(buffer);
 
-    if (!buffer || !ressources || !etat || !ressources->player) {
+    if (!buffer || !ressources || !etatJeu || !ressources->player) {
         return;
     }
 
-    fond = obtenir_fond_niveau(ressources, etat->niveau);
+    fond = obtenir_fond_niveau(ressources, etatJeu->niveauActuel);
     clear_to_color(buffer, makecol(COULEUR_NOIR_R, COULEUR_NOIR_G, COULEUR_NOIR_B));
     if (fond) {
         stretch_blit(fond,
@@ -267,20 +267,20 @@ static void dessiner_scene_jeu(BITMAP *buffer, const RessourcesJeu *ressources, 
 
     rectfill(buffer,
              VALEUR_NULLE,
-             etat->groundY,
+             etatJeu->positionSolY,
              largeurZoneDessin,
              hauteurZoneDessin,
              makecol(COULEUR_SOL_R, COULEUR_SOL_G, COULEUR_SOL_B));
 
-    for (i = INDEX_PREMIER; i < etat->nbBulles; i++) {
+    for (indexElement = INDEX_PREMIER; indexElement < etatJeu->nombreBulles; indexElement++) {
         BITMAP *sprite;
 
-        if (etat->bulles[i].type == ENTITE_VIF_DOR) {
-            sprite = ressources->spritesVifDor[(int) etat->bulles[i].taille];
-        } else if (etat->bulles[i].type == ENTITE_VOL_DE_MORT) {
-            sprite = ressources->spritesVolDeMort[(int) etat->bulles[i].taille];
+        if (etatJeu->bullesEnJeu[indexElement].typeEntite == ENTITE_VIF_DOR) {
+            sprite = ressources->spritesVifDor[(int) etatJeu->bullesEnJeu[indexElement].tailleBulle];
+        } else if (etatJeu->bullesEnJeu[indexElement].typeEntite == ENTITE_VOL_DE_MORT) {
+            sprite = ressources->spritesVolDeMort[(int) etatJeu->bullesEnJeu[indexElement].tailleBulle];
         } else {
-            sprite = ressources->sprites[(int) etat->bulles[i].taille];
+            sprite = ressources->sprites[(int) etatJeu->bullesEnJeu[indexElement].tailleBulle];
         }
 
         if (!sprite) {
@@ -291,8 +291,8 @@ static void dessiner_scene_jeu(BITMAP *buffer, const RessourcesJeu *ressources, 
                     buffer,
                     VALEUR_NULLE,
                     VALEUR_NULLE,
-                    (int) etat->bulles[i].x,
-                    (int) etat->bulles[i].y,
+                    (int) etatJeu->bullesEnJeu[indexElement].positionBulleX,
+                    (int) etatJeu->bullesEnJeu[indexElement].positionBulleY,
                     sprite->w,
                     sprite->h);
     }
@@ -301,27 +301,27 @@ static void dessiner_scene_jeu(BITMAP *buffer, const RessourcesJeu *ressources, 
                 buffer,
                 VALEUR_NULLE,
                 VALEUR_NULLE,
-                etat->x,
-                etat->y,
+                etatJeu->positionJoueurX,
+                etatJeu->positionJoueurY,
                 ressources->player->w,
                 ressources->player->h);
 
-    if (etat->projectileActive && ressources->tir) {
+    if (etatJeu->projectileEstActif && ressources->tir) {
         BITMAP *projectileSprite = ressources->tir;
 
         masked_blit(projectileSprite,
                     buffer,
                     VALEUR_NULLE,
                     VALEUR_NULLE,
-                    etat->projectileX - projectileSprite->w / DIVISEUR_CENTRE + etat->projectileW / DIVISEUR_CENTRE,
-                    etat->projectileY - projectileSprite->h + etat->projectileH,
+                    etatJeu->positionProjectileX - projectileSprite->w / DIVISEUR_CENTRE + etatJeu->largeurProjectile / DIVISEUR_CENTRE,
+                    etatJeu->positionProjectileY - projectileSprite->h + etatJeu->hauteurProjectile,
                     projectileSprite->w,
                     projectileSprite->h);
     }
 
-    if (etat->auraArdenteActive && ressources->feu) {
-        int effetX = etat->x - ressources->player->w / DIVISEUR_QUART;
-        int effetY = etat->y - ressources->player->h / DIVISEUR_TIERS;
+    if (etatJeu->auraArdenteEstActive && ressources->feu) {
+        int effetX = etatJeu->positionJoueurX - ressources->player->w / DIVISEUR_QUART;
+        int effetY = etatJeu->positionJoueurY - ressources->player->h / DIVISEUR_TIERS;
         int effetLargeur = ressources->player->w + ressources->player->w / DIVISEUR_CENTRE;
         int effetHauteur = ressources->player->h + ressources->player->h / DIVISEUR_CENTRE;
 
@@ -333,24 +333,24 @@ static void dessiner_scene_jeu(BITMAP *buffer, const RessourcesJeu *ressources, 
                        effetHauteur);
     }
 
-    if (etat->chapeauVisible && ressources->chapeau) {
+    if (etatJeu->chapeauEstVisible && ressources->chapeau) {
         masked_blit(ressources->chapeau,
                     buffer,
                     VALEUR_NULLE,
                     VALEUR_NULLE,
-                    etat->chapeauX,
-                    etat->chapeauY,
+                    etatJeu->positionChapeauX,
+                    etatJeu->positionChapeauY,
                     ressources->chapeau->w,
                     ressources->chapeau->h);
     }
 
-    if (etat->explosionActive && ressources->explosion) {
+    if (etatJeu->explosionEstActive && ressources->explosion) {
         masked_blit(ressources->explosion,
                     buffer,
                     VALEUR_NULLE,
                     VALEUR_NULLE,
-                    etat->explosionX,
-                    etat->explosionY,
+                    etatJeu->positionExplosionX,
+                    etatJeu->positionExplosionY,
                     ressources->explosion->w,
                     ressources->explosion->h);
     }
@@ -358,15 +358,15 @@ static void dessiner_scene_jeu(BITMAP *buffer, const RessourcesJeu *ressources, 
 
 static void dessiner_option_menu(BITMAP *buffer,
                                  const char *texte,
-                                 int y,
+                                 int positionOptionY,
                                  int selectionnee,
                                  int active) {
     int largeurZoneDessin = obtenir_largeur_zone_dessin(buffer);
     int hauteurZoneDessin = obtenir_hauteur_zone_dessin(buffer);
     int demiLargeur = largeurZoneDessin / DIVISEUR_SIXIEME;
     int demiHauteur = hauteurZoneDessin / DIVISEUR_QUARANTE_CINQUIEME;
-    int x1 = largeurZoneDessin / DIVISEUR_CENTRE - demiLargeur;
-    int x2 = largeurZoneDessin / DIVISEUR_CENTRE + demiLargeur;
+    int positionGauche = largeurZoneDessin / DIVISEUR_CENTRE - demiLargeur;
+    int positionDroite = largeurZoneDessin / DIVISEUR_CENTRE + demiLargeur;
     int couleurFond;
     int couleurTexte;
     int couleurCadre;
@@ -385,67 +385,77 @@ static void dessiner_option_menu(BITMAP *buffer,
         couleurCadre = makecol(COULEUR_OPTION_ACTIVE_CADRE_R, COULEUR_OPTION_ACTIVE_CADRE_G, COULEUR_OPTION_ACTIVE_CADRE_B);
     }
 
-    rectfill(buffer, x1, y - demiHauteur, x2, y + demiHauteur, couleurFond);
-    rect(buffer, x1, y - demiHauteur, x2, y + demiHauteur, couleurCadre);
-    textout_centre_ex(buffer, font, texte, largeurZoneDessin / DIVISEUR_CENTRE, y - text_height(font) / DIVISEUR_CENTRE, couleurTexte, COULEUR_TRANSPARENTE_TEXTE);
+    rectfill(buffer, positionGauche, positionOptionY - demiHauteur, positionDroite, positionOptionY + demiHauteur, couleurFond);
+    rect(buffer, positionGauche, positionOptionY - demiHauteur, positionDroite, positionOptionY + demiHauteur, couleurCadre);
+    textout_centre_ex(buffer,
+                      font,
+                      texte,
+                      largeurZoneDessin / DIVISEUR_CENTRE,
+                      positionOptionY - text_height(font) / DIVISEUR_CENTRE,
+                      couleurTexte,
+                      COULEUR_TRANSPARENTE_TEXTE);
 }
 
-static void tronquer_texte_pour_largeur(const char *source, char *destination, size_t tailleDestination, int largeurMax) {
+static void tronquer_texte_pour_largeur(const char *texteSource,
+                                        char *texteDestination,
+                                        size_t tailleTexteDestination,
+                                        int largeurMax) {
     size_t longueur;
 
-    if (!destination || tailleDestination == VALEUR_NULLE) {
+    if (!texteDestination || tailleTexteDestination == VALEUR_NULLE) {
         return;
     }
 
-    destination[CHAINE_DEBUT] = CARACTERE_FIN_CHAINE;
-    if (!source) {
+    texteDestination[CHAINE_DEBUT] = CARACTERE_FIN_CHAINE;
+    if (!texteSource) {
         return;
     }
 
-    strncpy(destination, source, tailleDestination - INDEX_SUIVANT);
-    destination[tailleDestination - INDEX_SUIVANT] = CARACTERE_FIN_CHAINE;
+    strncpy(texteDestination, texteSource, tailleTexteDestination - INDEX_SUIVANT);
+    texteDestination[tailleTexteDestination - INDEX_SUIVANT] = CARACTERE_FIN_CHAINE;
 
-    if (text_length(font, destination) <= largeurMax) {
+    if (text_length(font, texteDestination) <= largeurMax) {
         return;
     }
 
-    longueur = strlen(destination);
+    longueur = strlen(texteDestination);
     while (longueur > VALEUR_TRIPLE) {
         longueur--;
-        destination[longueur] = CARACTERE_FIN_CHAINE;
-        if (snprintf(destination + longueur, tailleDestination - longueur, "...") >= (int) (tailleDestination - longueur)) {
+        texteDestination[longueur] = CARACTERE_FIN_CHAINE;
+        if (snprintf(texteDestination + longueur, tailleTexteDestination - longueur, "...") >=
+            (int) (tailleTexteDestination - longueur)) {
             break;
         }
-        if (text_length(font, destination) <= largeurMax) {
+        if (text_length(font, texteDestination) <= largeurMax) {
             return;
         }
-        destination[longueur] = CARACTERE_FIN_CHAINE;
+        texteDestination[longueur] = CARACTERE_FIN_CHAINE;
     }
 
-    strncpy(destination, "...", tailleDestination - INDEX_SUIVANT);
-    destination[tailleDestination - INDEX_SUIVANT] = CARACTERE_FIN_CHAINE;
+    strncpy(texteDestination, "...", tailleTexteDestination - INDEX_SUIVANT);
+    texteDestination[tailleTexteDestination - INDEX_SUIVANT] = CARACTERE_FIN_CHAINE;
 }
 
-static void dessiner_panneau_hud(BITMAP *buffer, const EtatJeu *etat) {
+static void dessiner_panneau_hud(BITMAP *buffer, const EtatJeu *etatJeu) {
     char ligne[TAILLE_LIGNE_HUD];
-    char pseudo[TAILLE_PSEUDO_MAX + TAILLE_PSEUDO_AFFICHE];
+    char pseudoJoueur[TAILLE_PSEUDO_MAX + TAILLE_PSEUDO_AFFICHE];
     int largeurZoneDessin;
     int hauteurZoneDessin;
     int margeX;
     int margeY;
     int largeur;
     int hauteur;
-    int x1;
-    int y1;
-    int x2;
-    int y2;
-    int y;
+    int positionGauche;
+    int positionHaut;
+    int positionDroite;
+    int positionBas;
+    int positionPixelY;
     int interligne;
     int largeurTexte;
     int insetCadre;
     float tempsSecondes;
 
-    if (!buffer || !etat) {
+    if (!buffer || !etatJeu) {
         return;
     }
 
@@ -455,85 +465,85 @@ static void dessiner_panneau_hud(BITMAP *buffer, const EtatJeu *etat) {
     margeY = hauteurZoneDessin / DIVISEUR_TRENTE_SIXIEME;
     largeur = largeurZoneDessin / DIVISEUR_QUART;
     hauteur = hauteurZoneDessin / DIVISEUR_SIXIEME;
-    x1 = margeX;
-    y1 = margeY;
-    x2 = x1 + largeur;
-    y2 = y1 + hauteur;
+    positionGauche = margeX;
+    positionHaut = margeY;
+    positionDroite = positionGauche + largeur;
+    positionBas = positionHaut + hauteur;
     interligne = text_height(font) + hauteurZoneDessin / DIVISEUR_QUATRE_VINGT_DIXIEME;
     largeurTexte = largeur - largeurZoneDessin / DIVISEUR_QUARANTE_CINQUIEME;
     insetCadre = dimension_relative_zone(buffer,
                                          NUMERATEUR_REDIMENSION_RELATIVE,
                                          DIVISEUR_TROIS_CENT_QUARANTE_ET_UNIEME);
 
-    if (etat->niveau != VALEUR_UNITAIRE) {
-        rectfill(buffer, x1, y1, x2, y2, makecol(COULEUR_HUD_FOND_R, COULEUR_HUD_FOND_G, COULEUR_HUD_FOND_B));
-        rect(buffer, x1, y1, x2, y2, makecol(COULEUR_HUD_CONTOUR_R, COULEUR_HUD_CONTOUR_G, COULEUR_HUD_CONTOUR_B));
+    if (etatJeu->niveauActuel != VALEUR_UNITAIRE) {
+        rectfill(buffer, positionGauche, positionHaut, positionDroite, positionBas, makecol(COULEUR_HUD_FOND_R, COULEUR_HUD_FOND_G, COULEUR_HUD_FOND_B));
+        rect(buffer, positionGauche, positionHaut, positionDroite, positionBas, makecol(COULEUR_HUD_CONTOUR_R, COULEUR_HUD_CONTOUR_G, COULEUR_HUD_CONTOUR_B));
         rect(buffer,
-             x1 + insetCadre,
-             y1 + insetCadre,
-             x2 - insetCadre,
-             y2 - insetCadre,
+             positionGauche + insetCadre,
+             positionHaut + insetCadre,
+             positionDroite - insetCadre,
+             positionBas - insetCadre,
              makecol(COULEUR_HUD_CONTOUR_INTERNE_R, COULEUR_HUD_CONTOUR_INTERNE_G, COULEUR_HUD_CONTOUR_INTERNE_B));
     }
 
-    y = y1 + hauteurZoneDessin / DIVISEUR_SOIXANTE_DIXIEME;
-    textout_ex(buffer, font, "HUD JOUEUR", x1 + largeurZoneDessin / DIVISEUR_QUATRE_VINGT_DIXIEME, y, makecol(COULEUR_HUD_TITRE_R, COULEUR_HUD_TITRE_G, COULEUR_HUD_TITRE_B), COULEUR_TRANSPARENTE_TEXTE);
+    positionPixelY = positionHaut + hauteurZoneDessin / DIVISEUR_SOIXANTE_DIXIEME;
+    textout_ex(buffer, font, "HUD JOUEUR", positionGauche + largeurZoneDessin / DIVISEUR_QUATRE_VINGT_DIXIEME, positionPixelY, makecol(COULEUR_HUD_TITRE_R, COULEUR_HUD_TITRE_G, COULEUR_HUD_TITRE_B), COULEUR_TRANSPARENTE_TEXTE);
 
-    y += interligne;
-    snprintf(ligne, sizeof(ligne), FORMAT_CHRONOMETRE_HUD, (etat->tempsRestantNiveauMs + ARRONDI_CHRONO_MS) / VALEUR_MILLISECONDES_SECONDE);
-    textout_ex(buffer, font, ligne, x1 + largeurZoneDessin / DIVISEUR_QUATRE_VINGT_DIXIEME, y, makecol(COULEUR_HUD_TITRE_R, COULEUR_HUD_TITRE_G, COULEUR_HUD_TITRE_B), COULEUR_TRANSPARENTE_TEXTE);
+    positionPixelY += interligne;
+    snprintf(ligne, sizeof(ligne), FORMAT_CHRONOMETRE_HUD, (etatJeu->tempsRestantNiveauMs + ARRONDI_CHRONO_MS) / VALEUR_MILLISECONDES_SECONDE);
+    textout_ex(buffer, font, ligne, positionGauche + largeurZoneDessin / DIVISEUR_QUATRE_VINGT_DIXIEME, positionPixelY, makecol(COULEUR_HUD_TITRE_R, COULEUR_HUD_TITRE_G, COULEUR_HUD_TITRE_B), COULEUR_TRANSPARENTE_TEXTE);
 
-    y += interligne;
-    snprintf(ligne, sizeof(ligne), "Niveau : %d/%d", etat->niveau, etat->niveauMaximum);
-    textout_ex(buffer, font, ligne, x1 + largeurZoneDessin / DIVISEUR_QUATRE_VINGT_DIXIEME, y, makecol(COULEUR_BLANC_R, COULEUR_BLANC_G, COULEUR_BLANC_B), COULEUR_TRANSPARENTE_TEXTE);
+    positionPixelY += interligne;
+    snprintf(ligne, sizeof(ligne), "Niveau : %d/%d", etatJeu->niveauActuel, etatJeu->niveauMaximum);
+    textout_ex(buffer, font, ligne, positionGauche + largeurZoneDessin / DIVISEUR_QUATRE_VINGT_DIXIEME, positionPixelY, makecol(COULEUR_BLANC_R, COULEUR_BLANC_G, COULEUR_BLANC_B), COULEUR_TRANSPARENTE_TEXTE);
 
-    y += interligne;
-    snprintf(ligne, sizeof(ligne), "Score : %d", etat->score);
-    textout_ex(buffer, font, ligne, x1 + largeurZoneDessin / DIVISEUR_QUATRE_VINGT_DIXIEME, y, makecol(COULEUR_BLANC_R, COULEUR_BLANC_G, COULEUR_BLANC_B), COULEUR_TRANSPARENTE_TEXTE);
+    positionPixelY += interligne;
+    snprintf(ligne, sizeof(ligne), "Score : %d", etatJeu->scoreJoueur);
+    textout_ex(buffer, font, ligne, positionGauche + largeurZoneDessin / DIVISEUR_QUATRE_VINGT_DIXIEME, positionPixelY, makecol(COULEUR_BLANC_R, COULEUR_BLANC_G, COULEUR_BLANC_B), COULEUR_TRANSPARENTE_TEXTE);
 
-    y += interligne;
-    snprintf(pseudo, sizeof(pseudo), "Pseudo : %s", etat->pseudo[CHAINE_DEBUT] != CARACTERE_FIN_CHAINE ? etat->pseudo : "ANONYME");
-    tronquer_texte_pour_largeur(pseudo, ligne, sizeof(ligne), largeurTexte);
-    textout_ex(buffer, font, ligne, x1 + largeurZoneDessin / DIVISEUR_QUATRE_VINGT_DIXIEME, y, makecol(COULEUR_BLANC_R, COULEUR_BLANC_G, COULEUR_BLANC_B), COULEUR_TRANSPARENTE_TEXTE);
+    positionPixelY += interligne;
+    snprintf(pseudoJoueur, sizeof(pseudoJoueur), "Pseudo : %s", etatJeu->pseudoJoueur[CHAINE_DEBUT] != CARACTERE_FIN_CHAINE ? etatJeu->pseudoJoueur : "ANONYME");
+    tronquer_texte_pour_largeur(pseudoJoueur, ligne, sizeof(ligne), largeurTexte);
+    textout_ex(buffer, font, ligne, positionGauche + largeurZoneDessin / DIVISEUR_QUATRE_VINGT_DIXIEME, positionPixelY, makecol(COULEUR_BLANC_R, COULEUR_BLANC_G, COULEUR_BLANC_B), COULEUR_TRANSPARENTE_TEXTE);
 
-    y += interligne;
-    if (etat->auraArdenteActive) {
-        tempsSecondes = (float) etat->dureeRestanteAuraArdenteMs / (float) VALEUR_MILLISECONDES_SECONDE;
+    positionPixelY += interligne;
+    if (etatJeu->auraArdenteEstActive) {
+        tempsSecondes = (float) etatJeu->dureeRestanteAuraArdenteMs / (float) VALEUR_MILLISECONDES_SECONDE;
         snprintf(ligne, sizeof(ligne), FORMAT_AURA_ARDENTE_HUD, tempsSecondes);
-        textout_ex(buffer, font, ligne, x1 + largeurZoneDessin / DIVISEUR_QUATRE_VINGT_DIXIEME, y, makecol(COULEUR_HUD_AURA_ACTIVE_R, COULEUR_HUD_AURA_ACTIVE_G, COULEUR_HUD_AURA_ACTIVE_B), COULEUR_TRANSPARENTE_TEXTE);
+        textout_ex(buffer, font, ligne, positionGauche + largeurZoneDessin / DIVISEUR_QUATRE_VINGT_DIXIEME, positionPixelY, makecol(COULEUR_HUD_AURA_ACTIVE_R, COULEUR_HUD_AURA_ACTIVE_G, COULEUR_HUD_AURA_ACTIVE_B), COULEUR_TRANSPARENTE_TEXTE);
     } else {
-        textout_ex(buffer, font, "Aura ardente : INACTIVE", x1 + largeurZoneDessin / DIVISEUR_QUATRE_VINGT_DIXIEME, y, makecol(COULEUR_HUD_AURA_INACTIVE_R, COULEUR_HUD_AURA_INACTIVE_G, COULEUR_HUD_AURA_INACTIVE_B), COULEUR_TRANSPARENTE_TEXTE);
+        textout_ex(buffer, font, "Aura ardente : INACTIVE", positionGauche + largeurZoneDessin / DIVISEUR_QUATRE_VINGT_DIXIEME, positionPixelY, makecol(COULEUR_HUD_AURA_INACTIVE_R, COULEUR_HUD_AURA_INACTIVE_G, COULEUR_HUD_AURA_INACTIVE_B), COULEUR_TRANSPARENTE_TEXTE);
     }
 }
 
-static int obtenir_vie_boss(const EtatJeu *etat) {
-    int i;
+static int obtenir_vie_boss(const EtatJeu *etatJeu) {
+    int indexElement;
     int vieBoss = VALEUR_NULLE;
 
-    if (!etat) {
+    if (!etatJeu) {
         return FAUX;
     }
 
-    for (i = INDEX_PREMIER; i < etat->nbBulles; i++) {
-        if (etat->bulles[i].type == ENTITE_VOL_DE_MORT &&
-            etat->bulles[i].nombreCoupsAvantDivision > vieBoss) {
-            vieBoss = etat->bulles[i].nombreCoupsAvantDivision;
+    for (indexElement = INDEX_PREMIER; indexElement < etatJeu->nombreBulles; indexElement++) {
+        if (etatJeu->bullesEnJeu[indexElement].typeEntite == ENTITE_VOL_DE_MORT &&
+            etatJeu->bullesEnJeu[indexElement].nombreCoupsAvantDivision > vieBoss) {
+            vieBoss = etatJeu->bullesEnJeu[indexElement].nombreCoupsAvantDivision;
         }
     }
 
     return vieBoss;
 }
 
-static int boss_present(const EtatJeu *etat) {
-    int i;
+static int boss_present(const EtatJeu *etatJeu) {
+    int indexElement;
 
-    if (!etat) {
+    if (!etatJeu) {
         return FAUX;
     }
 
-    for (i = INDEX_PREMIER; i < etat->nbBulles; i++) {
-        if (etat->bulles[i].type == ENTITE_VOL_DE_MORT &&
-            etat->bulles[i].nombreCoupsAvantDivision > VALEUR_NULLE) {
+    for (indexElement = INDEX_PREMIER; indexElement < etatJeu->nombreBulles; indexElement++) {
+        if (etatJeu->bullesEnJeu[indexElement].typeEntite == ENTITE_VOL_DE_MORT &&
+            etatJeu->bullesEnJeu[indexElement].nombreCoupsAvantDivision > VALEUR_NULLE) {
             return VRAI;
         }
     }
@@ -541,19 +551,19 @@ static int boss_present(const EtatJeu *etat) {
     return FAUX;
 }
 
-static void dessiner_barre_vie_boss(BITMAP *buffer, const EtatJeu *etat) {
+static void dessiner_barre_vie_boss(BITMAP *buffer, const EtatJeu *etatJeu) {
     int largeurZoneDessin;
     int hauteurZoneDessin;
     int largeurBarre;
     int hauteurBarre;
-    int x1;
-    int y1;
-    int x2;
-    int y2;
+    int positionGauche;
+    int positionHaut;
+    int positionDroite;
+    int positionBas;
     int vieBoss;
     int largeurVie;
 
-    if (!buffer || !boss_present(etat)) {
+    if (!buffer || !boss_present(etatJeu)) {
         return;
     }
 
@@ -561,11 +571,11 @@ static void dessiner_barre_vie_boss(BITMAP *buffer, const EtatJeu *etat) {
     hauteurZoneDessin = obtenir_hauteur_zone_dessin(buffer);
     largeurBarre = largeurZoneDessin / DIVISEUR_TIERS;
     hauteurBarre = hauteurZoneDessin / DIVISEUR_TRENTE_CINQUIEME;
-    x1 = largeurZoneDessin / DIVISEUR_CENTRE - largeurBarre / DIVISEUR_CENTRE;
-    y1 = hauteurZoneDessin / DIVISEUR_VINGT_QUATRIEME;
-    x2 = x1 + largeurBarre;
-    y2 = y1 + hauteurBarre;
-    vieBoss = obtenir_vie_boss(etat);
+    positionGauche = largeurZoneDessin / DIVISEUR_CENTRE - largeurBarre / DIVISEUR_CENTRE;
+    positionHaut = hauteurZoneDessin / DIVISEUR_VINGT_QUATRIEME;
+    positionDroite = positionGauche + largeurBarre;
+    positionBas = positionHaut + hauteurBarre;
+    vieBoss = obtenir_vie_boss(etatJeu);
     if (vieBoss < VALEUR_NULLE) {
         vieBoss = VALEUR_NULLE;
     }
@@ -575,21 +585,21 @@ static void dessiner_barre_vie_boss(BITMAP *buffer, const EtatJeu *etat) {
 
     largeurVie = largeurBarre * vieBoss / VIE_MAX_BOSS_VOL_DE_MORT;
 
-    rectfill(buffer, x1, y1, x2, y2, makecol(COULEUR_BOSS_FOND_R, COULEUR_BOSS_FOND_G, COULEUR_BOSS_FOND_B));
-    rectfill(buffer, x1, y1, x1 + largeurVie, y2, makecol(COULEUR_BOSS_VIE_R, COULEUR_BOSS_VIE_G, COULEUR_BOSS_VIE_B));
-    rect(buffer, x1, y1, x2, y2, makecol(COULEUR_BOSS_CONTOUR_R, COULEUR_BOSS_CONTOUR_G, COULEUR_BOSS_CONTOUR_B));
+    rectfill(buffer, positionGauche, positionHaut, positionDroite, positionBas, makecol(COULEUR_BOSS_FOND_R, COULEUR_BOSS_FOND_G, COULEUR_BOSS_FOND_B));
+    rectfill(buffer, positionGauche, positionHaut, positionGauche + largeurVie, positionBas, makecol(COULEUR_BOSS_VIE_R, COULEUR_BOSS_VIE_G, COULEUR_BOSS_VIE_B));
+    rect(buffer, positionGauche, positionHaut, positionDroite, positionBas, makecol(COULEUR_BOSS_CONTOUR_R, COULEUR_BOSS_CONTOUR_G, COULEUR_BOSS_CONTOUR_B));
     textout_centre_ex(buffer,
                       font,
                       "BOSS",
                       largeurZoneDessin / DIVISEUR_CENTRE,
-                      y1 + hauteurBarre / DIVISEUR_CENTRE - text_height(font) / DIVISEUR_CENTRE,
+                      positionHaut + hauteurBarre / DIVISEUR_CENTRE - text_height(font) / DIVISEUR_CENTRE,
                       makecol(COULEUR_BLANC_R, COULEUR_BLANC_G, COULEUR_BLANC_B),
                       COULEUR_TRANSPARENTE_TEXTE);
 }
 
 static void normaliser_transparence_magenta(BITMAP *bitmap) {
-    int x;
-    int y;
+    int positionPixelX;
+    int positionPixelY;
     int couleurMasque;
 
     if (!bitmap) {
@@ -597,9 +607,9 @@ static void normaliser_transparence_magenta(BITMAP *bitmap) {
     }
 
     couleurMasque = bitmap_mask_color(bitmap);
-    for (y = INDEX_PREMIER; y < bitmap->h; y++) {
-        for (x = INDEX_PREMIER; x < bitmap->w; x++) {
-            int couleur = getpixel(bitmap, x, y);
+    for (positionPixelY = INDEX_PREMIER; positionPixelY < bitmap->h; positionPixelY++) {
+        for (positionPixelX = INDEX_PREMIER; positionPixelX < bitmap->w; positionPixelX++) {
+            int couleur = getpixel(bitmap, positionPixelX, positionPixelY);
             int r = getr(couleur);
             int g = getg(couleur);
             int b = getb(couleur);
@@ -607,7 +617,7 @@ static void normaliser_transparence_magenta(BITMAP *bitmap) {
             if (r >= SEUIL_TRANSPARENCE_MAGENTA_R &&
                 g <= SEUIL_TRANSPARENCE_MAGENTA_G &&
                 b >= SEUIL_TRANSPARENCE_MAGENTA_B) {
-                putpixel(bitmap, x, y, couleurMasque);
+                putpixel(bitmap, positionPixelX, positionPixelY, couleurMasque);
             }
         }
     }
@@ -629,7 +639,7 @@ static int fichier_existe_simple(const char *chemin) {
     return VRAI;
 }
 
-static int resoudre_chemin_ressource(const char *chemin, char *destination, size_t taille) {
+static int resoudre_chemin_ressource(const char *chemin, char *cheminResolu, size_t tailleCheminResolu) {
     static const char *prefixes[] = {
         "",
         "../",
@@ -637,30 +647,31 @@ static int resoudre_chemin_ressource(const char *chemin, char *destination, size
         PREFIXE_RESSOURCE_PROJET,
         PREFIXE_RESSOURCE_PARENT_PROJET
     };
-    int i;
+    int indexElement;
 
-    if (!chemin || !destination || taille == VALEUR_NULLE || chemin[CHAINE_DEBUT] == CARACTERE_FIN_CHAINE) {
+    if (!chemin || !cheminResolu || tailleCheminResolu == VALEUR_NULLE || chemin[CHAINE_DEBUT] == CARACTERE_FIN_CHAINE) {
         return FAUX;
     }
 
     if (chemin[CHAINE_DEBUT] == '/') {
-        if (strlen(chemin) + INDEX_SUIVANT > taille) {
+        if (strlen(chemin) + INDEX_SUIVANT > tailleCheminResolu) {
             return FAUX;
         }
-        strcpy(destination, chemin);
-        return fichier_existe_simple(destination);
+        strcpy(cheminResolu, chemin);
+        return fichier_existe_simple(cheminResolu);
     }
 
-    for (i = INDEX_PREMIER; i < (int) (sizeof(prefixes) / sizeof(prefixes[CHAINE_DEBUT])); i++) {
-        if (snprintf(destination, taille, "%s%s", prefixes[i], chemin) >= (int) taille) {
+    for (indexElement = INDEX_PREMIER; indexElement < (int) (sizeof(prefixes) / sizeof(prefixes[CHAINE_DEBUT])); indexElement++) {
+        if (snprintf(cheminResolu, tailleCheminResolu, "%s%s", prefixes[indexElement], chemin) >=
+            (int) tailleCheminResolu) {
             continue;
         }
-        if (fichier_existe_simple(destination)) {
+        if (fichier_existe_simple(cheminResolu)) {
             return VRAI;
         }
     }
 
-    destination[CHAINE_DEBUT] = CARACTERE_FIN_CHAINE;
+    cheminResolu[CHAINE_DEBUT] = CARACTERE_FIN_CHAINE;
     return FAUX;
 }
 
@@ -716,12 +727,12 @@ int initialiser_affichage(const char *fond_path,
         }
     }
 
-    largeur = dimension_relative(largeurReference,
-                                 JEU_FENETRE_LARGEUR_NUMERATEUR,
-                                 JEU_FENETRE_RATIO_DENOMINATEUR);
-    hauteur = dimension_relative(hauteurReference,
-                                 JEU_FENETRE_HAUTEUR_NUMERATEUR,
-                                 JEU_FENETRE_RATIO_DENOMINATEUR);
+    largeur = dimension_relative_proportionnelle(largeurReference,
+                                                 JEU_FENETRE_LARGEUR_NUMERATEUR,
+                                                 JEU_FENETRE_RATIO_DENOMINATEUR);
+    hauteur = dimension_relative_proportionnelle(hauteurReference,
+                                                 JEU_FENETRE_HAUTEUR_NUMERATEUR,
+                                                 JEU_FENETRE_RATIO_DENOMINATEUR);
 
     if (set_gfx_mode(GFX_AUTODETECT_WINDOWED, largeur, hauteur, VALEUR_NULLE, VALEUR_NULLE) != VALEUR_NULLE) {
         allegro_message("Erreur mode graphique");
@@ -759,38 +770,38 @@ BITMAP *charger_bitmap_ou_erreur(const char *chemin) {
     return bitmap;
 }
 
-static BITMAP *resize_bitmap_dimensions(BITMAP *src, int largeur, int hauteur) {
-    BITMAP *dest;
+static BITMAP *resize_bitmap_dimensions(BITMAP *bitmapSource, int largeur, int hauteur) {
+    BITMAP *bitmapRedimensionne;
 
-    if (!src || largeur <= VALEUR_NULLE || hauteur <= VALEUR_NULLE) {
+    if (!bitmapSource || largeur <= VALEUR_NULLE || hauteur <= VALEUR_NULLE) {
         return NULL;
     }
 
-    dest = create_bitmap(largeur, hauteur);
-    if (!dest) {
+    bitmapRedimensionne = create_bitmap(largeur, hauteur);
+    if (!bitmapRedimensionne) {
         return NULL;
     }
 
-    clear_to_color(dest, makecol(COULEUR_MAGENTA_R, COULEUR_MAGENTA_G, COULEUR_MAGENTA_B));
-    stretch_blit(src, dest, VALEUR_NULLE, VALEUR_NULLE, src->w, src->h, VALEUR_NULLE, VALEUR_NULLE, largeur, hauteur);
-    return dest;
+    clear_to_color(bitmapRedimensionne, makecol(COULEUR_MAGENTA_R, COULEUR_MAGENTA_G, COULEUR_MAGENTA_B));
+    stretch_blit(bitmapSource, bitmapRedimensionne, VALEUR_NULLE, VALEUR_NULLE, bitmapSource->w, bitmapSource->h, VALEUR_NULLE, VALEUR_NULLE, largeur, hauteur);
+    return bitmapRedimensionne;
 }
 
-static BITMAP *resize_bitmap_hauteur_relative(BITMAP *src, int hauteurReference, int numerateur, int denominateur) {
+static BITMAP *resize_bitmap_hauteur_relative(BITMAP *bitmapSource, int hauteurReference, int numerateur, int denominateur) {
     int hauteur;
     int largeur;
 
-    if (!src || src->w <= VALEUR_NULLE || src->h <= VALEUR_NULLE) {
+    if (!bitmapSource || bitmapSource->w <= VALEUR_NULLE || bitmapSource->h <= VALEUR_NULLE) {
         return NULL;
     }
 
-    hauteur = dimension_relative(hauteurReference, numerateur, denominateur);
-    largeur = src->w * hauteur / src->h;
+    hauteur = dimension_relative_proportionnelle(hauteurReference, numerateur, denominateur);
+    largeur = bitmapSource->w * hauteur / bitmapSource->h;
     if (largeur <= VALEUR_NULLE) {
         largeur = hauteur > VALEUR_NULLE ? hauteur : VALEUR_NULLE;
     }
 
-    return resize_bitmap_dimensions(src, largeur, hauteur);
+    return resize_bitmap_dimensions(bitmapSource, largeur, hauteur);
 }
 
 int charger_ressources_jeu(RessourcesJeu *ressources,
@@ -1045,7 +1056,7 @@ void dessiner_menu_depart(const RessourcesJeu *ressources, int selection, int re
         "Parametres",
         "Regles"
     };
-    int i;
+    int indexElement;
     int yBase;
     int pasVertical;
 
@@ -1073,12 +1084,12 @@ void dessiner_menu_depart(const RessourcesJeu *ressources, int selection, int re
 
     yBase = SCREEN_H / DIVISEUR_CENTRE - SCREEN_H / DIVISEUR_TREIZIEME;
     pasVertical = SCREEN_H / DIVISEUR_DIX_HUITIEME;
-    for (i = INDEX_PREMIER; i < NOMBRE_OPTIONS_MENU_DEPART; i++) {
+    for (indexElement = INDEX_PREMIER; indexElement < NOMBRE_OPTIONS_MENU_DEPART; indexElement++) {
         dessiner_option_menu(ressources->buffer,
-                             options[i],
-                             yBase + i * pasVertical,
-                             selection == i,
-                             i != MENU_REPRENDRE_PARTIE || repriseDisponible);
+                             options[indexElement],
+                             yBase + indexElement * pasVertical,
+                             selection == indexElement,
+                             indexElement != MENU_REPRENDRE_PARTIE || repriseDisponible);
     }
 
     if (!repriseDisponible) {
@@ -1164,7 +1175,7 @@ void dessiner_selection_niveau(const RessourcesJeu *ressources,
                                int selection,
                                int niveauMaximumDebloque,
                                int niveauMaximumTotal) {
-    int i;
+    int indexElement;
     int yBase;
     int pasVertical;
     char texte[TAILLE_TEXTE_MENU];
@@ -1194,12 +1205,12 @@ void dessiner_selection_niveau(const RessourcesJeu *ressources,
     yBase = SCREEN_H / DIVISEUR_CENTRE - SCREEN_H / DIVISEUR_DIXIEME;
     pasVertical = SCREEN_H / DIVISEUR_DIX_HUITIEME;
 
-    for (i = INDEX_PREMIER; i < niveauMaximumDebloque; i++) {
-        uszprintf(texte, sizeof(texte), "Niveau %d", i + INDEX_SUIVANT);
+    for (indexElement = INDEX_PREMIER; indexElement < niveauMaximumDebloque; indexElement++) {
+        uszprintf(texte, sizeof(texte), "Niveau %d", indexElement + INDEX_SUIVANT);
         dessiner_option_menu(ressources->buffer,
                              texte,
-                             yBase + i * pasVertical,
-                             selection == i,
+                             yBase + indexElement * pasVertical,
+                             selection == indexElement,
                              VRAI);
     }
 
@@ -1207,6 +1218,56 @@ void dessiner_selection_niveau(const RessourcesJeu *ressources,
                          "Retour menu",
                          yBase + niveauMaximumDebloque * pasVertical,
                          selection == niveauMaximumDebloque,
+                         VRAI);
+
+    afficher_buffer_a_l_ecran(ressources->buffer);
+}
+
+void dessiner_selection_sauvegarde(const RessourcesJeu *ressources,
+                                   int selection,
+                                   const char pseudos[NOMBRE_SLOTS_SAUVEGARDE][TAILLE_PSEUDO_MAX],
+                                   const int sauvegardesDisponibles[NOMBRE_SLOTS_SAUVEGARDE]) {
+    int indexElement;
+    int yBase;
+    int pasVertical;
+    char texte[TAILLE_TEXTE_MENU];
+
+    if (!ressources || !ressources->buffer || !pseudos || !sauvegardesDisponibles) {
+        return;
+    }
+
+    dessiner_fond_scene(ressources->buffer, ressources);
+    dessiner_panneau_menu(ressources->buffer, SCREEN_W / DIVISEUR_QUART, SCREEN_H / DIVISEUR_QUART);
+
+    textout_centre_ex(ressources->buffer,
+                      font,
+                      "CHOIX DE SAUVEGARDE",
+                      SCREEN_W / DIVISEUR_CENTRE,
+                      SCREEN_H / DIVISEUR_CENTRE - SCREEN_H / DIVISEUR_CINQUIEME,
+                      makecol(COULEUR_BLANC_R, COULEUR_BLANC_G, COULEUR_BLANC_B),
+                      COULEUR_TRANSPARENTE_TEXTE);
+
+    yBase = SCREEN_H / DIVISEUR_CENTRE - SCREEN_H / DIVISEUR_DIXIEME;
+    pasVertical = SCREEN_H / DIVISEUR_DIX_HUITIEME;
+
+    for (indexElement = INDEX_PREMIER; indexElement < NOMBRE_SLOTS_SAUVEGARDE; indexElement++) {
+        if (sauvegardesDisponibles[indexElement]) {
+            uszprintf(texte, sizeof(texte), "Pseudo : %s", pseudos[indexElement]);
+        } else {
+            uszprintf(texte, sizeof(texte), "Emplacement libre");
+        }
+
+        dessiner_option_menu(ressources->buffer,
+                             texte,
+                             yBase + indexElement * pasVertical,
+                             selection == indexElement,
+                             sauvegardesDisponibles[indexElement]);
+    }
+
+    dessiner_option_menu(ressources->buffer,
+                         "Retour menu",
+                         yBase + NOMBRE_SLOTS_SAUVEGARDE * pasVertical,
+                         selection == NOMBRE_SLOTS_SAUVEGARDE,
                          VRAI);
 
     afficher_buffer_a_l_ecran(ressources->buffer);
@@ -1239,7 +1300,7 @@ void dessiner_ecran_information(const RessourcesJeu *ressources,
     afficher_buffer_a_l_ecran(ressources->buffer);
 }
 
-void dessiner_saisie_pseudo(const RessourcesJeu *ressources, const char *pseudo) {
+void dessiner_saisie_pseudo(const RessourcesJeu *ressources, const char *pseudoJoueur) {
     int demiLargeur;
     int demiHauteur;
     int champDemiLargeur;
@@ -1285,7 +1346,7 @@ void dessiner_saisie_pseudo(const RessourcesJeu *ressources, const char *pseudo)
                          makecol(COULEUR_BLANC_R, COULEUR_BLANC_G, COULEUR_BLANC_B),
                          COULEUR_TRANSPARENTE_TEXTE,
                          "%s_",
-                         pseudo);
+                         pseudoJoueur);
     textout_centre_ex(ressources->buffer,
                       font,
                       "ESC pour revenir au menu",
@@ -1297,14 +1358,14 @@ void dessiner_saisie_pseudo(const RessourcesJeu *ressources, const char *pseudo)
     afficher_buffer_a_l_ecran(ressources->buffer);
 }
 
-void dessiner_decompte_depart(const RessourcesJeu *ressources, const EtatJeu *etat, int valeur) {
+void dessiner_decompte_depart(const RessourcesJeu *ressources, const EtatJeu *etatJeu, int valeur) {
     char texte[TAILLE_TEXTE_DECOMPTE];
 
-    if (!ressources || !etat || !ressources->buffer) {
+    if (!ressources || !etatJeu || !ressources->buffer) {
         return;
     }
 
-    dessiner_scene_jeu(ressources->buffer, ressources, etat);
+    dessiner_scene_jeu(ressources->buffer, ressources, etatJeu);
     uszprintf(texte, sizeof(texte), "%d", valeur);
     dessiner_texte_centre_aggrandi(ressources->buffer,
                                    texte,
@@ -1317,20 +1378,20 @@ void dessiner_decompte_depart(const RessourcesJeu *ressources, const EtatJeu *et
     afficher_buffer_a_l_ecran(ressources->buffer);
 }
 
-void dessiner_jeu(const RessourcesJeu *ressources, const EtatJeu *etat) {
-    if (!ressources || !etat || !ressources->buffer || !ressources->player) {
+void dessiner_jeu(const RessourcesJeu *ressources, const EtatJeu *etatJeu) {
+    if (!ressources || !etatJeu || !ressources->buffer || !ressources->player) {
         return;
     }
 
-    dessiner_scene_jeu(ressources->buffer, ressources, etat);
-    dessiner_panneau_hud(ressources->buffer, etat);
-    dessiner_barre_vie_boss(ressources->buffer, etat);
+    dessiner_scene_jeu(ressources->buffer, ressources, etatJeu);
+    dessiner_panneau_hud(ressources->buffer, etatJeu);
+    dessiner_barre_vie_boss(ressources->buffer, etatJeu);
 
-    if (etat->perdu) {
+    if (etatJeu->partiePerdue) {
         afficher_message_centre(ressources->buffer, SCREEN_W / DIVISEUR_SEPTIEME, makecol(COULEUR_ROUGE_R, COULEUR_ROUGE_G, COULEUR_ROUGE_B), makecol(COULEUR_ROUGE_R, COULEUR_ROUGE_G, COULEUR_ROUGE_B), "PERDU");
     }
-    if (etat->gagne) {
-        if (etat->niveau < etat->niveauMaximum) {
+    if (etatJeu->partieGagnee) {
+        if (etatJeu->niveauActuel < etatJeu->niveauMaximum) {
             afficher_message_centre(ressources->buffer, SCREEN_W / DIVISEUR_CINQUIEME, makecol(COULEUR_VERT_R, COULEUR_VERT_G, COULEUR_VERT_B), makecol(COULEUR_VERT_R, COULEUR_VERT_G, COULEUR_VERT_B), "GAGNE - ENTREE POUR CHOIX NIVEAU");
         } else {
             afficher_message_centre(ressources->buffer, SCREEN_W / DIVISEUR_CINQUIEME, makecol(COULEUR_VERT_R, COULEUR_VERT_G, COULEUR_VERT_B), makecol(COULEUR_VERT_R, COULEUR_VERT_G, COULEUR_VERT_B), "VICTOIRE FINALE - ENTREE POUR MENU");
@@ -1348,21 +1409,21 @@ void liberer_bitmap(BITMAP **bitmap) {
 }
 
 void liberer_ressources_jeu(RessourcesJeu *ressources) {
-    int i;
+    int indexElement;
 
     if (!ressources) {
         return;
     }
 
     liberer_bitmap(&ressources->buffer);
-    for (i = INDEX_SUIVANT; i < NOMBRE_FONDS_NIVEAUX; i++) {
-        liberer_bitmap(&ressources->fondsNiveaux[i]);
+    for (indexElement = INDEX_SUIVANT; indexElement < NOMBRE_FONDS_NIVEAUX; indexElement++) {
+        liberer_bitmap(&ressources->fondsNiveaux[indexElement]);
     }
     ressources->fondsNiveaux[CHAINE_DEBUT] = NULL;
-    for (i = INDEX_PREMIER; i < BULLE_TAILLES_TOTAL; i++) {
-        liberer_bitmap(&ressources->sprites[i]);
-        liberer_bitmap(&ressources->spritesVifDor[i]);
-        liberer_bitmap(&ressources->spritesVolDeMort[i]);
+    for (indexElement = INDEX_PREMIER; indexElement < BULLE_TAILLES_TOTAL; indexElement++) {
+        liberer_bitmap(&ressources->sprites[indexElement]);
+        liberer_bitmap(&ressources->spritesVifDor[indexElement]);
+        liberer_bitmap(&ressources->spritesVolDeMort[indexElement]);
     }
     liberer_bitmap(&ressources->player);
     liberer_bitmap(&ressources->tir);

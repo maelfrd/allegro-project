@@ -40,14 +40,18 @@ void dessiner_selection_niveau(const RessourcesJeu *ressources,
                                int selection,
                                int niveauMaximumDebloque,
                                int niveauMaximumTotal);
+void dessiner_selection_sauvegarde(const RessourcesJeu *ressources,
+                                   int selection,
+                                   const char pseudos[NOMBRE_SLOTS_SAUVEGARDE][TAILLE_PSEUDO_MAX],
+                                   const int sauvegardesDisponibles[NOMBRE_SLOTS_SAUVEGARDE]);
 void dessiner_ecran_information(const RessourcesJeu *ressources,
                                 const char *titre,
                                 const char *ligne1,
                                 const char *ligne2,
                                 const char *ligne3);
-void dessiner_saisie_pseudo(const RessourcesJeu *ressources, const char *pseudo);
-void dessiner_decompte_depart(const RessourcesJeu *ressources, const EtatJeu *etat, int valeur);
-void dessiner_jeu(const RessourcesJeu *ressources, const EtatJeu *etat);
+void dessiner_saisie_pseudo(const RessourcesJeu *ressources, const char *pseudoJoueur);
+void dessiner_decompte_depart(const RessourcesJeu *ressources, const EtatJeu *etatJeu, int valeur);
+void dessiner_jeu(const RessourcesJeu *ressources, const EtatJeu *etatJeu);
 void liberer_bitmap(BITMAP **bitmap);
 void liberer_ressources_jeu(RessourcesJeu *ressources);
 void fermer_affichage(void);

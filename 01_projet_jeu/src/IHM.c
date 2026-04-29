@@ -38,6 +38,7 @@ static void reinitialiser_actions_navigation(ActionsIHM *actions) {
     actions->retourMenu = FAUX;
     actions->valider = FAUX;
     actions->niveauChoisi = VALEUR_NULLE;
+    actions->sauvegardeChoisie = INDEX_INVALIDE;
     actions->basculerModeDemonstration = FAUX;
     actions->lancerDemoNiveau = VALEUR_NULLE;
 }
@@ -51,6 +52,7 @@ void initialiser_actions_ihm(ActionsIHM *actions) {
     actions->menuSelection = MENU_NOUVELLE_PARTIE;
     actions->parametresSelection = PARAM_MODE_DEMO;
     actions->niveauSelection = INDEX_PREMIER;
+    actions->sauvegardeSelection = INDEX_PREMIER;
 }
 
 void traiter_ihm_menu(ActionsIHM *actions, int repriseDisponible) {
@@ -248,6 +250,56 @@ void traiter_ihm_selection_niveau(ActionsIHM *actions, int niveauMaximumDebloque
     actions->toucheEntreeMenuPrecedente = key[KEY_ENTER];
 }
 
+void traiter_ihm_selection_sauvegarde(ActionsIHM *actions, const int sauvegardesDisponibles[], int nombreSauvegardes) {
+    int selectionMax;
+
+    if (!actions || !sauvegardesDisponibles || nombreSauvegardes <= VALEUR_NULLE) {
+        return;
+    }
+
+    actions->quitter = FAUX;
+    actions->sauvegarder = FAUX;
+    actions->charger = FAUX;
+    reinitialiser_actions_navigation(actions);
+
+    selectionMax = nombreSauvegardes;
+    if (actions->sauvegardeSelection > selectionMax) {
+        actions->sauvegardeSelection = selectionMax;
+    }
+
+    if (key[KEY_UP] && !actions->toucheHautMenuPrecedente) {
+        actions->sauvegardeSelection--;
+        if (actions->sauvegardeSelection < VALEUR_NULLE) {
+            actions->sauvegardeSelection = selectionMax;
+        }
+    }
+
+    if (key[KEY_DOWN] && !actions->toucheBasMenuPrecedente) {
+        actions->sauvegardeSelection++;
+        if (actions->sauvegardeSelection > selectionMax) {
+            actions->sauvegardeSelection = INDEX_PREMIER;
+        }
+    }
+
+    if (key[KEY_ENTER] && !actions->toucheEntreeMenuPrecedente) {
+        if (actions->sauvegardeSelection < nombreSauvegardes &&
+            sauvegardesDisponibles[actions->sauvegardeSelection]) {
+            actions->sauvegardeChoisie = actions->sauvegardeSelection;
+        } else if (actions->sauvegardeSelection == nombreSauvegardes) {
+            actions->retourMenu = VRAI;
+        }
+    }
+
+    if ((key[KEY_ESC] || key[KEY_BACKSPACE]) && !actions->toucheRetourPrecedente) {
+        actions->retourMenu = VRAI;
+    }
+
+    actions->toucheRetourPrecedente = key[KEY_ESC] || key[KEY_BACKSPACE];
+    actions->toucheHautMenuPrecedente = key[KEY_UP];
+    actions->toucheBasMenuPrecedente = key[KEY_DOWN];
+    actions->toucheEntreeMenuPrecedente = key[KEY_ENTER];
+}
+
 void traiter_ihm_jeu(ActionsIHM *actions, CommandesJeu *commandes, int partieBloquee) {
     if (!actions || !commandes) {
         return;
@@ -289,10 +341,10 @@ void traiter_ihm_jeu(ActionsIHM *actions, CommandesJeu *commandes, int partieBlo
     actions->toucheRetourPrecedente = key[KEY_ESC];
 }
 
-void traiter_ihm_saisie_pseudo(ActionsIHM *actions, char *pseudo, int taillePseudo) {
+void traiter_ihm_saisie_pseudo(ActionsIHM *actions, char *pseudoJoueur, int taillePseudo) {
     int longueur;
 
-    if (!actions || !pseudo || taillePseudo <= VALEUR_UNITAIRE) {
+    if (!actions || !pseudoJoueur || taillePseudo <= VALEUR_UNITAIRE) {
         return;
     }
 
@@ -301,7 +353,7 @@ void traiter_ihm_saisie_pseudo(ActionsIHM *actions, char *pseudo, int taillePseu
     actions->charger = FAUX;
     reinitialiser_actions_navigation(actions);
 
-    longueur = (int) strlen(pseudo);
+    longueur = (int) strlen(pseudoJoueur);
 
     while (keypressed()) {
         int touche = readkey();
@@ -323,15 +375,15 @@ void traiter_ihm_saisie_pseudo(ActionsIHM *actions, char *pseudo, int taillePseu
         if (code == KEY_BACKSPACE) {
             if (longueur > VALEUR_NULLE) {
                 longueur--;
-                pseudo[longueur] = CARACTERE_FIN_CHAINE;
+                pseudoJoueur[longueur] = CARACTERE_FIN_CHAINE;
             }
             continue;
         }
 
         if (caractere_pseudo_valide(ascii) && longueur < taillePseudo - INDEX_SUIVANT) {
-            pseudo[longueur] = (char) ascii;
+            pseudoJoueur[longueur] = (char) ascii;
             longueur++;
-            pseudo[longueur] = CARACTERE_FIN_CHAINE;
+            pseudoJoueur[longueur] = CARACTERE_FIN_CHAINE;
         }
     }
 }

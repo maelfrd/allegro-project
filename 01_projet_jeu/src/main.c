@@ -4,8 +4,8 @@
 #include "sauvegarde.h"
 
 #include <stdio.h>
+#include <string.h>
 
-#define CHEMIN_SAUVEGARDE "savegame.dat"
 #define CHEMIN_FOND_PRINCIPAL "assets/fg.bmp"
 #define CHEMIN_IMAGE_JOUEUR "assets/hary2.bmp"
 #define CHEMIN_IMAGE_MANGE_MORT "assets/mangemort.bmp"
@@ -22,13 +22,14 @@ typedef enum {
     ECRAN_JEU,
     ECRAN_PARAMETRES,
     ECRAN_REGLES,
-    ECRAN_SELECTION_NIVEAU
+    ECRAN_SELECTION_NIVEAU,
+    ECRAN_SELECTION_SAUVEGARDE
 } EcranActif;
 
 typedef struct {
     RessourcesJeu ressources;
     ConfigurationJeu configuration;
-    EtatJeu etat;
+    EtatJeu etatJeu;
     ActionsIHM actions;
     CommandesJeu commandes;
     EcranActif ecranActuel;
@@ -37,25 +38,33 @@ typedef struct {
     int niveauMaximumDebloque;
     int valeurDecompte;
     int tempsRestantDecompteMs;
+    int sauvegardeActuelle;
+    int nombreSauvegardesDisponibles;
+    int sauvegardesDisponibles[NOMBRE_SLOTS_SAUVEGARDE];
+    char pseudosSauvegardes[NOMBRE_SLOTS_SAUVEGARDE][TAILLE_PSEUDO_MAX];
     char pseudoJoueur[TAILLE_PSEUDO_MAX];
 } ApplicationJeu;
 
 static void construire_configuration_jeu(ConfigurationJeu *configuration,
                                          const RessourcesJeu *ressources);
-static int dimension_relative(int reference, int diviseur);
-static int fichier_existe(const char *cheminFichier);
 static void initialiser_decompte_depart(ApplicationJeu *application);
 static void vider_pseudo_joueur(ApplicationJeu *application);
 static int demarrer_systemes_jeu(ApplicationJeu *application);
 static void fermer_systemes_jeu(ApplicationJeu *application);
 static int lancer_niveau(ApplicationJeu *application, int numeroNiveau);
-static int charger_partie_et_lancer_decompte(ApplicationJeu *application);
+static int construire_chemin_sauvegarde_slot(char *cheminSauvegarde, size_t tailleCheminSauvegarde, int indexSlot);
+static void actualiser_sauvegardes(ApplicationJeu *application);
+static int trouver_slot_sauvegarde_pour_pseudo(ApplicationJeu *application, const char *pseudoJoueur);
+static int partie_en_cours_sauvegardable(const ApplicationJeu *application);
+static int sauvegarder_partie_courante(ApplicationJeu *application);
+static int charger_partie_et_lancer_decompte(ApplicationJeu *application, int indexSlot);
 static void traiter_ecran_menu(ApplicationJeu *application);
 static void traiter_ecran_saisie_pseudo(ApplicationJeu *application);
 static void traiter_ecran_decompte(ApplicationJeu *application);
 static void traiter_ecran_parametres(ApplicationJeu *application);
 static void traiter_ecran_regles(ApplicationJeu *application);
 static void traiter_ecran_selection_niveau(ApplicationJeu *application);
+static void traiter_ecran_selection_sauvegarde(ApplicationJeu *application);
 static void traiter_retour_depuis_le_jeu(ApplicationJeu *application);
 static void traiter_ecran_jeu(ApplicationJeu *application);
 
@@ -69,7 +78,8 @@ int main(void) {
 
     while (!application.actions.quitter) {
         /* --- vérifier si une sauvegarde peut être reprise --- */
-        application.repriseDisponible = fichier_existe(CHEMIN_SAUVEGARDE);
+        actualiser_sauvegardes(&application);
+        application.repriseDisponible = application.nombreSauvegardesDisponibles > VALEUR_NULLE;
 
         /* --- traiter l'écran actuellement affiché --- */
         switch (application.ecranActuel) {
@@ -100,6 +110,10 @@ int main(void) {
             case ECRAN_SELECTION_NIVEAU:
                 traiter_ecran_selection_niveau(&application);
                 break;
+
+            case ECRAN_SELECTION_SAUVEGARDE:
+                traiter_ecran_selection_sauvegarde(&application);
+                break;
         }
 
         /* --- limiter la boucle de jeu à un rythme stable --- */
@@ -122,9 +136,9 @@ static void construire_configuration_jeu(ConfigurationJeu *configuration,
     /* --- calculer les dimensions générales du terrain de jeu --- */
     configuration->largeurFenetre = largeurFenetre;
     configuration->hauteurFenetre = hauteurFenetre;
-    configuration->groundY = hauteurFenetre - dimension_relative(hauteurFenetre, DIVISEUR_HAUTEUR_SOL);
-    configuration->leftLimit = VALEUR_NULLE;
-    configuration->rightLimit = largeurFenetre;
+    configuration->positionSolY = hauteurFenetre - dimension_relative(hauteurFenetre, DIVISEUR_HAUTEUR_SOL);
+    configuration->limiteGaucheTerrain = VALEUR_NULLE;
+    configuration->limiteDroiteTerrain = largeurFenetre;
 
     /* --- adapter la vitesse du joueur à la fenêtre --- */
     configuration->vitesseJoueur = dimension_relative(largeurFenetre, DIVISEUR_VITESSE_JOUEUR);
@@ -152,40 +166,6 @@ static void construire_configuration_jeu(ConfigurationJeu *configuration,
     }
 }
 
-static int dimension_relative(int reference, int diviseur) {
-    int valeur;
-
-    if (reference <= VALEUR_NULLE || diviseur <= VALEUR_NULLE) {
-        return VALEUR_NULLE;
-    }
-
-    valeur = reference / diviseur;
-    if (valeur <= VALEUR_NULLE) {
-        valeur = reference / reference;
-    }
-
-    return valeur;
-}
-
-static int fichier_existe(const char *cheminFichier) {
-    FILE *fichier;
-
-    /* --- refuser un chemin vide ou nul --- */
-    if (!cheminFichier || cheminFichier[CHAINE_DEBUT] == CARACTERE_FIN_CHAINE) {
-        return FAUX;
-    }
-
-    /* --- tenter l'ouverture du fichier en lecture binaire --- */
-    fichier = fopen(cheminFichier, "rb");
-    if (!fichier) {
-        return FAUX;
-    }
-
-    /* --- fermer le fichier immédiatement après le test --- */
-    fclose(fichier);
-    return VRAI;
-}
-
 static void initialiser_decompte_depart(ApplicationJeu *application) {
     /* --- préparer l'écran de décompte avant d'entrer en jeu --- */
     application->valeurDecompte = VALEUR_DECOMPTE_DEPART;
@@ -199,6 +179,8 @@ static void vider_pseudo_joueur(ApplicationJeu *application) {
 }
 
 static int demarrer_systemes_jeu(ApplicationJeu *application) {
+    int indexSauvegarde;
+
     /* --- ouvrir la fenêtre Allegro --- */
     if (!initialiser_affichage(CHEMIN_FOND_PRINCIPAL,
                                PROFONDEUR_COULEUR_JEU)) {
@@ -223,7 +205,7 @@ static int demarrer_systemes_jeu(ApplicationJeu *application) {
     construire_configuration_jeu(&application->configuration, &application->ressources);
 
     /* --- initialiser l'état logique de la partie --- */
-    if (!initialiser_logique_jeu(&application->etat, &application->configuration)) {
+    if (!initialiser_logique_jeu(&application->etatJeu, &application->configuration)) {
         liberer_ressources_jeu(&application->ressources);
         fermer_affichage();
         return FAUX;
@@ -231,7 +213,7 @@ static int demarrer_systemes_jeu(ApplicationJeu *application) {
 
     /* --- ouvrir le système de sauvegarde --- */
     if (!initialiser_sauvegarde()) {
-        fermer_logique_jeu(&application->etat);
+        fermer_logique_jeu(&application->etatJeu);
         liberer_ressources_jeu(&application->ressources);
         fermer_affichage();
         return FAUX;
@@ -246,22 +228,32 @@ static int demarrer_systemes_jeu(ApplicationJeu *application) {
     application->niveauMaximumDebloque = PREMIER_NIVEAU_JEU;
     application->valeurDecompte = VALEUR_NULLE;
     application->tempsRestantDecompteMs = VALEUR_NULLE;
+    application->sauvegardeActuelle = INDEX_INVALIDE;
+    application->nombreSauvegardesDisponibles = VALEUR_NULLE;
+    for (indexSauvegarde = INDEX_PREMIER; indexSauvegarde < NOMBRE_SLOTS_SAUVEGARDE; indexSauvegarde++) {
+        application->sauvegardesDisponibles[indexSauvegarde] = FAUX;
+        application->pseudosSauvegardes[indexSauvegarde][CHAINE_DEBUT] = CARACTERE_FIN_CHAINE;
+    }
     vider_pseudo_joueur(application);
+    actualiser_sauvegardes(application);
 
     return VRAI;
 }
 
 static void fermer_systemes_jeu(ApplicationJeu *application) {
     /* --- fermer les sous-systèmes dans l'ordre inverse de l'initialisation --- */
+    if (partie_en_cours_sauvegardable(application)) {
+        sauvegarder_partie_courante(application);
+    }
     fermer_sauvegarde();
-    fermer_logique_jeu(&application->etat);
+    fermer_logique_jeu(&application->etatJeu);
     liberer_ressources_jeu(&application->ressources);
     fermer_affichage();
 }
 
 static int lancer_niveau(ApplicationJeu *application, int numeroNiveau) {
     /* --- réinitialiser la partie sur le niveau demandé --- */
-    if (!reinitialiser_partie(&application->etat, &application->configuration, numeroNiveau)) {
+    if (!reinitialiser_partie(&application->etatJeu, &application->configuration, numeroNiveau)) {
         return FAUX;
     }
 
@@ -270,14 +262,125 @@ static int lancer_niveau(ApplicationJeu *application, int numeroNiveau) {
     return VRAI;
 }
 
-static int charger_partie_et_lancer_decompte(ApplicationJeu *application) {
-    /* --- charger la sauvegarde depuis le disque --- */
-    if (!charger_etat_jeu(&application->etat, CHEMIN_SAUVEGARDE)) {
+static int construire_chemin_sauvegarde_slot(char *cheminSauvegarde, size_t tailleCheminSauvegarde, int indexSlot) {
+    if (!cheminSauvegarde || tailleCheminSauvegarde == VALEUR_NULLE ||
+        indexSlot < INDEX_PREMIER || indexSlot >= NOMBRE_SLOTS_SAUVEGARDE) {
         return FAUX;
     }
-    if (application->etat.niveau > application->niveauMaximumDebloque) {
-        application->niveauMaximumDebloque = application->etat.niveau;
+
+    return snprintf(cheminSauvegarde,
+                    tailleCheminSauvegarde,
+                    FORMAT_CHEMIN_SAUVEGARDE_SLOT,
+                    indexSlot + INDEX_SUIVANT) < (int) tailleCheminSauvegarde;
+}
+
+static void actualiser_sauvegardes(ApplicationJeu *application) {
+    int indexSauvegarde;
+    char cheminSauvegarde[TAILLE_CHEMIN_RESSOURCE];
+
+    if (!application) {
+        return;
     }
+
+    application->nombreSauvegardesDisponibles = VALEUR_NULLE;
+    for (indexSauvegarde = INDEX_PREMIER; indexSauvegarde < NOMBRE_SLOTS_SAUVEGARDE; indexSauvegarde++) {
+        application->sauvegardesDisponibles[indexSauvegarde] = FAUX;
+        application->pseudosSauvegardes[indexSauvegarde][CHAINE_DEBUT] = CARACTERE_FIN_CHAINE;
+
+        if (construire_chemin_sauvegarde_slot(cheminSauvegarde, sizeof(cheminSauvegarde), indexSauvegarde) &&
+            charger_pseudo_sauvegarde(cheminSauvegarde,
+                                      application->pseudosSauvegardes[indexSauvegarde],
+                                      TAILLE_PSEUDO_MAX)) {
+            application->sauvegardesDisponibles[indexSauvegarde] = VRAI;
+            application->nombreSauvegardesDisponibles++;
+        }
+    }
+}
+
+static int trouver_slot_sauvegarde_pour_pseudo(ApplicationJeu *application, const char *pseudoJoueur) {
+    int indexSauvegarde;
+
+    if (!application || !pseudoJoueur || pseudoJoueur[CHAINE_DEBUT] == CARACTERE_FIN_CHAINE) {
+        return INDEX_INVALIDE;
+    }
+
+    actualiser_sauvegardes(application);
+    for (indexSauvegarde = INDEX_PREMIER; indexSauvegarde < NOMBRE_SLOTS_SAUVEGARDE; indexSauvegarde++) {
+        if (application->sauvegardesDisponibles[indexSauvegarde] &&
+            strcmp(application->pseudosSauvegardes[indexSauvegarde], pseudoJoueur) == VALEUR_NULLE) {
+            return indexSauvegarde;
+        }
+    }
+
+    for (indexSauvegarde = INDEX_PREMIER; indexSauvegarde < NOMBRE_SLOTS_SAUVEGARDE; indexSauvegarde++) {
+        if (!application->sauvegardesDisponibles[indexSauvegarde]) {
+            return indexSauvegarde;
+        }
+    }
+
+    return INDEX_PREMIER;
+}
+
+static int partie_en_cours_sauvegardable(const ApplicationJeu *application) {
+    if (!application) {
+        return FAUX;
+    }
+
+    if (application->ecranActuel != ECRAN_JEU &&
+        application->ecranActuel != ECRAN_DECOMPTE) {
+        return FAUX;
+    }
+
+    return application->etatJeu.pseudoJoueur[CHAINE_DEBUT] != CARACTERE_FIN_CHAINE &&
+           !application->etatJeu.partiePerdue &&
+           !application->etatJeu.partieGagnee &&
+           application->etatJeu.tempsRestantNiveauMs > VALEUR_NULLE &&
+           application->etatJeu.nombreBulles > VALEUR_NULLE;
+}
+
+static int sauvegarder_partie_courante(ApplicationJeu *application) {
+    char cheminSauvegarde[TAILLE_CHEMIN_RESSOURCE];
+    int indexSauvegarde;
+
+    if (!application ||
+        application->etatJeu.pseudoJoueur[CHAINE_DEBUT] == CARACTERE_FIN_CHAINE ||
+        application->etatJeu.partiePerdue ||
+        application->etatJeu.partieGagnee) {
+        return FAUX;
+    }
+
+    indexSauvegarde = trouver_slot_sauvegarde_pour_pseudo(application, application->etatJeu.pseudoJoueur);
+    if (indexSauvegarde == INDEX_INVALIDE ||
+        !construire_chemin_sauvegarde_slot(cheminSauvegarde, sizeof(cheminSauvegarde), indexSauvegarde)) {
+        return FAUX;
+    }
+
+    if (!sauvegarder_etat_jeu(&application->etatJeu, cheminSauvegarde)) {
+        return FAUX;
+    }
+
+    application->sauvegardeActuelle = indexSauvegarde;
+    actualiser_sauvegardes(application);
+    return VRAI;
+}
+
+static int charger_partie_et_lancer_decompte(ApplicationJeu *application, int indexSlot) {
+    char cheminSauvegarde[TAILLE_CHEMIN_RESSOURCE];
+
+    if (!construire_chemin_sauvegarde_slot(cheminSauvegarde, sizeof(cheminSauvegarde), indexSlot)) {
+        return FAUX;
+    }
+
+    /* --- charger la sauvegarde depuis le disque --- */
+    if (!charger_etat_jeu(&application->etatJeu, cheminSauvegarde)) {
+        return FAUX;
+    }
+    if (application->etatJeu.niveauActuel > application->niveauMaximumDebloque) {
+        application->niveauMaximumDebloque = application->etatJeu.niveauActuel;
+    }
+    application->sauvegardeActuelle = indexSlot;
+    strncpy(application->pseudoJoueur, application->etatJeu.pseudoJoueur, TAILLE_PSEUDO_MAX - INDEX_SUIVANT);
+    application->pseudoJoueur[TAILLE_PSEUDO_MAX - INDEX_SUIVANT] = CARACTERE_FIN_CHAINE;
 
     /* --- relancer un décompte avant de rendre la main au joueur --- */
     initialiser_decompte_depart(application);
@@ -295,7 +398,11 @@ static void traiter_ecran_menu(ApplicationJeu *application) {
         application->actions.niveauSelection = INDEX_PREMIER;
         application->ecranActuel = ECRAN_SAISIE_PSEUDO;
     } else if (application->actions.reprendrePartie) {
-        charger_partie_et_lancer_decompte(application);
+        actualiser_sauvegardes(application);
+        if (application->nombreSauvegardesDisponibles > VALEUR_NULLE) {
+            application->actions.sauvegardeSelection = INDEX_PREMIER;
+            application->ecranActuel = ECRAN_SELECTION_SAUVEGARDE;
+        }
     } else if (application->actions.ouvrirParametres) {
         application->ecranActuel = ECRAN_PARAMETRES;
     } else if (application->actions.ouvrirRegles) {
@@ -319,7 +426,8 @@ static void traiter_ecran_saisie_pseudo(ApplicationJeu *application) {
         application->ecranActuel = ECRAN_MENU;
     } else if (application->actions.valider) {
         if (lancer_niveau(application, PREMIER_NIVEAU_JEU)) {
-            definir_pseudo_joueur(&application->etat, application->pseudoJoueur);
+            definir_pseudo_joueur(&application->etatJeu, application->pseudoJoueur);
+            application->sauvegardeActuelle = trouver_slot_sauvegarde_pour_pseudo(application, application->pseudoJoueur);
         }
     }
 
@@ -330,7 +438,7 @@ static void traiter_ecran_saisie_pseudo(ApplicationJeu *application) {
 static void traiter_ecran_decompte(ApplicationJeu *application) {
     /* --- afficher le chiffre courant du décompte --- */
     dessiner_decompte_depart(&application->ressources,
-                             &application->etat,
+                             &application->etatJeu,
                              application->valeurDecompte);
 
     /* --- faire avancer le décompte image par image --- */
@@ -408,17 +516,43 @@ static void traiter_ecran_selection_niveau(ApplicationJeu *application) {
     dessiner_selection_niveau(&application->ressources,
                               application->actions.niveauSelection,
                               application->niveauMaximumDebloque,
-                              application->etat.niveauMaximum);
+                              application->etatJeu.niveauMaximum);
+}
+
+static void traiter_ecran_selection_sauvegarde(ApplicationJeu *application) {
+    actualiser_sauvegardes(application);
+    traiter_ihm_selection_sauvegarde(&application->actions,
+                                      application->sauvegardesDisponibles,
+                                      NOMBRE_SLOTS_SAUVEGARDE);
+
+    if (application->actions.sauvegardeChoisie != INDEX_INVALIDE) {
+        charger_partie_et_lancer_decompte(application, application->actions.sauvegardeChoisie);
+    } else if (application->actions.retourMenu) {
+        application->ecranActuel = ECRAN_MENU;
+    }
+
+    if (application->ecranActuel != ECRAN_SELECTION_SAUVEGARDE) {
+        return;
+    }
+
+    dessiner_selection_sauvegarde(&application->ressources,
+                                  application->actions.sauvegardeSelection,
+                                  application->pseudosSauvegardes,
+                                  application->sauvegardesDisponibles);
 }
 
 static void traiter_retour_depuis_le_jeu(ApplicationJeu *application) {
+    if (partie_en_cours_sauvegardable(application)) {
+        sauvegarder_partie_courante(application);
+    }
+
     /* --- revenir au choix de niveau après une victoire --- */
-    if (application->etat.gagne) {
-        if (application->etat.niveau < application->etat.niveauMaximum) {
-            if (application->etat.niveau + INDEX_SUIVANT > application->niveauMaximumDebloque) {
-                application->niveauMaximumDebloque = application->etat.niveau + INDEX_SUIVANT;
+    if (application->etatJeu.partieGagnee) {
+        if (application->etatJeu.niveauActuel < application->etatJeu.niveauMaximum) {
+            if (application->etatJeu.niveauActuel + INDEX_SUIVANT > application->niveauMaximumDebloque) {
+                application->niveauMaximumDebloque = application->etatJeu.niveauActuel + INDEX_SUIVANT;
             }
-            application->actions.niveauSelection = application->etat.niveau;
+            application->actions.niveauSelection = application->etatJeu.niveauActuel;
             application->ecranActuel = ECRAN_SELECTION_NIVEAU;
         } else {
             application->ecranActuel = ECRAN_MENU;
@@ -434,15 +568,19 @@ static void traiter_ecran_jeu(ApplicationJeu *application) {
     /* --- lire les commandes de jeu et geler les entrées si la partie est finie --- */
     traiter_ihm_jeu(&application->actions,
                     &application->commandes,
-                    application->etat.perdu || application->etat.gagne);
+                    application->etatJeu.partiePerdue || application->etatJeu.partieGagnee);
 
     /* --- sauvegarder ou charger la partie à la demande --- */
     if (application->actions.sauvegarder) {
-        sauvegarder_etat_jeu(&application->etat, CHEMIN_SAUVEGARDE);
+        sauvegarder_partie_courante(application);
     }
 
     if (application->actions.charger) {
-        charger_partie_et_lancer_decompte(application);
+        if (application->sauvegardeActuelle != INDEX_INVALIDE) {
+            charger_partie_et_lancer_decompte(application, application->sauvegardeActuelle);
+        } else {
+            application->ecranActuel = ECRAN_SELECTION_SAUVEGARDE;
+        }
     }
 
     /* --- laisser le décompte reprendre immédiatement après un chargement --- */
@@ -458,11 +596,13 @@ static void traiter_ecran_jeu(ApplicationJeu *application) {
 
     /* --- mettre à jour la logique tant que le joueur ne quitte pas --- */
     if (!application->actions.quitter) {
-        mettre_a_jour_logique_jeu(&application->etat,
+        mettre_a_jour_logique_jeu(&application->etatJeu,
                                   &application->configuration,
                                   &application->commandes);
+    } else {
+        sauvegarder_partie_courante(application);
     }
 
     /* --- dessiner la scène de jeu complète --- */
-    dessiner_jeu(&application->ressources, &application->etat);
+    dessiner_jeu(&application->ressources, &application->etatJeu);
 }

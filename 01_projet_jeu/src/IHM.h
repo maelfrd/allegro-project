@@ -17,6 +17,8 @@ typedef struct {
     int parametresSelection;
     int niveauSelection;
     int niveauChoisi;
+    int sauvegardeSelection;
+    int sauvegardeChoisie;
     int basculerModeDemonstration;
     int lancerDemoNiveau;
     int toucheHautMenuPrecedente;
@@ -34,7 +36,8 @@ void traiter_ihm_menu(ActionsIHM *actions, int repriseDisponible);
 void traiter_ihm_ecran_secondaire(ActionsIHM *actions);
 void traiter_ihm_parametres(ActionsIHM *actions, int modeDemonstrationActif);
 void traiter_ihm_selection_niveau(ActionsIHM *actions, int niveauMaximumDebloque);
+void traiter_ihm_selection_sauvegarde(ActionsIHM *actions, const int sauvegardesDisponibles[], int nombreSauvegardes);
 void traiter_ihm_jeu(ActionsIHM *actions, CommandesJeu *commandes, int partieBloquee);
-void traiter_ihm_saisie_pseudo(ActionsIHM *actions, char *pseudo, int taillePseudo);
+void traiter_ihm_saisie_pseudo(ActionsIHM *actions, char *pseudoJoueur, int taillePseudo);
 
 #endif

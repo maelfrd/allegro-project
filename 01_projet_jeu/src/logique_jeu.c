@@ -19,54 +19,39 @@ static float vitesse_verticale_relative(const ConfigurationJeu *configuration, i
     return (float) configuration->hauteurFenetre / (float) diviseur;
 }
 
-static int dimension_relative(int reference, int diviseur) {
-    int valeur;
-
-    if (reference <= VALEUR_NULLE || diviseur <= VALEUR_NULLE) {
-        return VALEUR_NULLE;
-    }
-
-    valeur = reference / diviseur;
-    if (valeur <= VALEUR_NULLE) {
-        valeur = reference / reference;
-    }
-
-    return valeur;
-}
-
 static int calculer_score_bulle(const Bulle *bulle) {
-    int score;
+    int scoreJoueur;
 
     if (!bulle) {
         return VALEUR_NULLE;
     }
 
-    switch (bulle->taille) {
+    switch (bulle->tailleBulle) {
         case BULLE_TRES_GRANDE:
-            score = SCORE_BULLE_TRES_GRANDE;
+            scoreJoueur = SCORE_BULLE_TRES_GRANDE;
             break;
         case BULLE_GRANDE:
-            score = SCORE_BULLE_GRANDE;
+            scoreJoueur = SCORE_BULLE_GRANDE;
             break;
         case BULLE_MOYENNE:
-            score = SCORE_BULLE_MOYENNE;
+            scoreJoueur = SCORE_BULLE_MOYENNE;
             break;
         case BULLE_PETITE:
-            score = SCORE_BULLE_PETITE;
+            scoreJoueur = SCORE_BULLE_PETITE;
             break;
         case BULLE_TAILLES_TOTAL:
-            score = VALEUR_NULLE;
+            scoreJoueur = VALEUR_NULLE;
             break;
     }
 
-    if (bulle->type == ENTITE_VIF_DOR) {
-        score += BONUS_SCORE_VIF_DOR;
+    if (bulle->typeEntite == ENTITE_VIF_DOR) {
+        scoreJoueur += BONUS_SCORE_VIF_DOR;
     }
-    if (bulle->type == ENTITE_VOL_DE_MORT) {
-        score += BONUS_SCORE_VOL_DE_MORT;
+    if (bulle->typeEntite == ENTITE_VOL_DE_MORT) {
+        scoreJoueur += BONUS_SCORE_VOL_DE_MORT;
     }
 
-    return score;
+    return scoreJoueur;
 }
 
 static int rectangles_en_collision(float x1, float y1, int largeurRectangle1, int hauteurRectangle1,
@@ -77,28 +62,28 @@ static int rectangles_en_collision(float x1, float y1, int largeurRectangle1, in
             y1 + hauteurRectangle1 > y2);
 }
 
-static void copier_configuration_dans_etat(EtatJeu *etat, const ConfigurationJeu *configuration) {
-    etat->groundY = configuration->groundY;
-    etat->leftLimit = configuration->leftLimit;
-    etat->rightLimit = configuration->rightLimit;
-    etat->speed = configuration->vitesseJoueur;
-    etat->projectileW = configuration->projectileLargeur;
-    etat->projectileH = configuration->projectileHauteur;
-    etat->projectileSpeed = configuration->projectileVitesse;
-    etat->chapeauW = configuration->chapeauLargeur;
-    etat->chapeauH = configuration->chapeauHauteur;
-    etat->explosionW = configuration->explosionLargeur;
-    etat->explosionH = configuration->explosionHauteur;
+static void copier_configuration_dans_etat(EtatJeu *etatJeu, const ConfigurationJeu *configuration) {
+    etatJeu->positionSolY = configuration->positionSolY;
+    etatJeu->limiteGaucheTerrain = configuration->limiteGaucheTerrain;
+    etatJeu->limiteDroiteTerrain = configuration->limiteDroiteTerrain;
+    etatJeu->vitesseJoueur = configuration->vitesseJoueur;
+    etatJeu->largeurProjectile = configuration->projectileLargeur;
+    etatJeu->hauteurProjectile = configuration->projectileHauteur;
+    etatJeu->vitesseProjectile = configuration->projectileVitesse;
+    etatJeu->largeurChapeau = configuration->chapeauLargeur;
+    etatJeu->hauteurChapeau = configuration->chapeauHauteur;
+    etatJeu->largeurExplosion = configuration->explosionLargeur;
+    etatJeu->hauteurExplosion = configuration->explosionHauteur;
 }
 
-static void configurer_bulle(Bulle *bulle, TailleBulle taille, const ConfigurationJeu *configuration) {
-    bulle->type = ENTITE_MANGE_MORT;
-    bulle->taille = taille;
-    bulle->largeur = configuration->largeurBulles[(int) taille];
-    bulle->hauteur = configuration->hauteurBulles[(int) taille];
+static void configurer_bulle(Bulle *bulle, TailleBulle tailleBulle, const ConfigurationJeu *configuration) {
+    bulle->typeEntite = ENTITE_MANGE_MORT;
+    bulle->tailleBulle = tailleBulle;
+    bulle->largeur = configuration->largeurBulles[(int) tailleBulle];
+    bulle->hauteur = configuration->hauteurBulles[(int) tailleBulle];
     bulle->nombreCoupsAvantDivision = VALEUR_NULLE;
 
-    switch (taille) {
+    switch (tailleBulle) {
         case BULLE_TRES_GRANDE:
             bulle->gravite = vitesse_verticale_relative(configuration, DIVISEUR_GRAVITE_TRES_GRANDE);
             bulle->rebondSol = -vitesse_verticale_relative(configuration, DIVISEUR_REBOND_TRES_GRANDE);
@@ -124,26 +109,26 @@ static void configurer_bulle(Bulle *bulle, TailleBulle taille, const Configurati
     }
 }
 
-static int assurer_capacite_bulles(EtatJeu *etat, int nouvelleCapacite) {
+static int assurer_capacite_bulles(EtatJeu *etatJeu, int nouvelleCapacite) {
     Bulle *nouveauTableauBulles;
 
-    if (nouvelleCapacite <= etat->capaciteBulles) {
+    if (nouvelleCapacite <= etatJeu->capaciteMaxBullesEnJeu) {
         return VRAI;
     }
 
-    nouveauTableauBulles = (Bulle *) realloc(etat->bulles, (size_t) nouvelleCapacite * sizeof(Bulle));
+    nouveauTableauBulles = (Bulle *) realloc(etatJeu->bullesEnJeu, (size_t) nouvelleCapacite * sizeof(Bulle));
     if (!nouveauTableauBulles) {
         return FAUX;
     }
 
-    etat->bulles = nouveauTableauBulles;
-    etat->capaciteBulles = nouvelleCapacite;
+    etatJeu->bullesEnJeu = nouveauTableauBulles;
+    etatJeu->capaciteMaxBullesEnJeu = nouvelleCapacite;
     return VRAI;
 }
 
 static float calculer_vitesse_horizontale_bulle_enfant(const ConfigurationJeu *configuration,
-                                                       TailleBulle taille) {
-    switch (taille) {
+                                                       TailleBulle tailleBulle) {
+    switch (tailleBulle) {
         case BULLE_TRES_GRANDE:
             return vitesse_horizontale_relative(configuration, DIVISEUR_VITESSE_ENFANT_TRES_GRANDE);
         case BULLE_GRANDE:
@@ -159,67 +144,67 @@ static float calculer_vitesse_horizontale_bulle_enfant(const ConfigurationJeu *c
     return vitesse_horizontale_relative(configuration, DIVISEUR_VITESSE_ENFANT_GRANDE);
 }
 
-static int ajouter_bulle(EtatJeu *etat,
+static int ajouter_bulle(EtatJeu *etatJeu,
                          const ConfigurationJeu *configuration,
-                         TypeEntite type,
-                         float x,
-                         float y,
-                         float vx,
-                         float vy,
-                         TailleBulle taille) {
+                         TypeEntite typeEntite,
+                         float positionBulleX,
+                         float positionBulleY,
+                         float vitesseBulleX,
+                         float vitesseBulleY,
+                         TailleBulle tailleBulle) {
     Bulle *bulle;
 
-    if (!etat || !configuration) {
+    if (!etatJeu || !configuration) {
         return FAUX;
     }
 
-    if (etat->nbBulles >= etat->capaciteBulles) {
-        int nouvelleCapacite = etat->capaciteBulles == VALEUR_NULLE
+    if (etatJeu->nombreBulles >= etatJeu->capaciteMaxBullesEnJeu) {
+        int nouvelleCapacite = etatJeu->capaciteMaxBullesEnJeu == VALEUR_NULLE
                                ? CAPACITE_BULLES_INITIALE
-                               : etat->capaciteBulles * FACTEUR_CAPACITE_BULLES;
+                               : etatJeu->capaciteMaxBullesEnJeu * FACTEUR_CAPACITE_BULLES;
 
-        if (!assurer_capacite_bulles(etat, nouvelleCapacite)) {
+        if (!assurer_capacite_bulles(etatJeu, nouvelleCapacite)) {
             return FAUX;
         }
     }
 
-    bulle = &etat->bulles[etat->nbBulles];
-    configurer_bulle(bulle, taille, configuration);
-    bulle->type = type;
-    bulle->x = x;
-    bulle->y = y;
-    bulle->vx = vx;
-    bulle->vy = vy;
+    bulle = &etatJeu->bullesEnJeu[etatJeu->nombreBulles];
+    configurer_bulle(bulle, tailleBulle, configuration);
+    bulle->typeEntite = typeEntite;
+    bulle->positionBulleX = positionBulleX;
+    bulle->positionBulleY = positionBulleY;
+    bulle->vitesseBulleX = vitesseBulleX;
+    bulle->vitesseBulleY = vitesseBulleY;
 
-    etat->nbBulles++;
+    etatJeu->nombreBulles++;
     return VRAI;
 }
 
-static void supprimer_bulle(EtatJeu *etat, int index) {
-    if (!etat || index < VALEUR_NULLE || index >= etat->nbBulles) {
+static void supprimer_bulle(EtatJeu *etatJeu, int index) {
+    if (!etatJeu || index < VALEUR_NULLE || index >= etatJeu->nombreBulles) {
         return;
     }
 
-    etat->nbBulles--;
-    if (index != etat->nbBulles) {
-        etat->bulles[index] = etat->bulles[etat->nbBulles];
+    etatJeu->nombreBulles--;
+    if (index != etatJeu->nombreBulles) {
+        etatJeu->bullesEnJeu[index] = etatJeu->bullesEnJeu[etatJeu->nombreBulles];
     }
 }
 
-static void faire_apparaitre_chapeau(EtatJeu *etat,
+static void faire_apparaitre_chapeau(EtatJeu *etatJeu,
                                      const ConfigurationJeu *configuration,
-                                     const Bulle *source) {
-    if (!etat || !configuration || !source) {
+                                     const Bulle *bulleSource) {
+    if (!etatJeu || !configuration || !bulleSource) {
         return;
     }
 
-    etat->chapeauVisible = VRAI;
-    etat->chapeauX = (int) (source->x + source->largeur / DIVISEUR_CENTRE - etat->chapeauW / DIVISEUR_CENTRE);
-    etat->chapeauY = (int) (source->y + source->hauteur / DIVISEUR_CENTRE - etat->chapeauH / DIVISEUR_CENTRE);
-    etat->chapeauVx = source->vx >= ZERO_FLOTTANT
+    etatJeu->chapeauEstVisible = VRAI;
+    etatJeu->positionChapeauX = (int) (bulleSource->positionBulleX + bulleSource->largeur / DIVISEUR_CENTRE - etatJeu->largeurChapeau / DIVISEUR_CENTRE);
+    etatJeu->positionChapeauY = (int) (bulleSource->positionBulleY + bulleSource->hauteur / DIVISEUR_CENTRE - etatJeu->hauteurChapeau / DIVISEUR_CENTRE);
+    etatJeu->vitesseChapeauX = bulleSource->vitesseBulleX >= ZERO_FLOTTANT
                       ? vitesse_horizontale_relative(configuration, DIVISEUR_VITESSE_CHAPEAU_X)
                       : -vitesse_horizontale_relative(configuration, DIVISEUR_VITESSE_CHAPEAU_X);
-    etat->chapeauVy = -vitesse_verticale_relative(configuration, DIVISEUR_VITESSE_CHAPEAU_Y);
+    etatJeu->vitesseChapeauY = -vitesse_verticale_relative(configuration, DIVISEUR_VITESSE_CHAPEAU_Y);
 }
 
 static void configurer_vol_de_mort(Bulle *bulle) {
@@ -227,23 +212,23 @@ static void configurer_vol_de_mort(Bulle *bulle) {
         return;
     }
 
-    bulle->type = ENTITE_VOL_DE_MORT;
+    bulle->typeEntite = ENTITE_VOL_DE_MORT;
     bulle->nombreCoupsAvantDivision = VIE_MAX_BOSS_VOL_DE_MORT;
 }
 
-static void declencher_explosion(EtatJeu *etat, const Bulle *source) {
-    if (!etat || !source) {
+static void declencher_explosion(EtatJeu *etatJeu, const Bulle *bulleSource) {
+    if (!etatJeu || !bulleSource) {
         return;
     }
 
-    etat->explosionActive = VRAI;
-    etat->explosionTimer = DUREE_EXPLOSION_IMAGES;
-    etat->explosionX = (int) (source->x + source->largeur / DIVISEUR_CENTRE - etat->explosionW / DIVISEUR_CENTRE);
-    etat->explosionY = (int) (source->y + source->hauteur / DIVISEUR_CENTRE - etat->explosionH / DIVISEUR_CENTRE);
+    etatJeu->explosionEstActive = VRAI;
+    etatJeu->dureeExplosionRestanteImages = DUREE_EXPLOSION_IMAGES;
+    etatJeu->positionExplosionX = (int) (bulleSource->positionBulleX + bulleSource->largeur / DIVISEUR_CENTRE - etatJeu->largeurExplosion / DIVISEUR_CENTRE);
+    etatJeu->positionExplosionY = (int) (bulleSource->positionBulleY + bulleSource->hauteur / DIVISEUR_CENTRE - etatJeu->hauteurExplosion / DIVISEUR_CENTRE);
 }
 
-static void separer_bulle(EtatJeu *etat, const ConfigurationJeu *configuration, int index) {
-    Bulle source;
+static void separer_bulle(EtatJeu *etatJeu, const ConfigurationJeu *configuration, int index) {
+    Bulle bulleSource;
     TailleBulle tailleBulleEnfant;
     float centreBulleX;
     float centreBulleY;
@@ -253,147 +238,147 @@ static void separer_bulle(EtatJeu *etat, const ConfigurationJeu *configuration, 
     int indexNouvelleBulleGauche;
     int indexNouvelleBulleDroite;
 
-    if (!etat || !configuration || index < VALEUR_NULLE || index >= etat->nbBulles) {
+    if (!etatJeu || !configuration || index < VALEUR_NULLE || index >= etatJeu->nombreBulles) {
         return;
     }
 
-    source = etat->bulles[index];
-    if (source.taille == BULLE_PETITE) {
-        if (source.type == ENTITE_VIF_DOR) {
-            faire_apparaitre_chapeau(etat, configuration, &source);
+    bulleSource = etatJeu->bullesEnJeu[index];
+    if (bulleSource.tailleBulle == BULLE_PETITE) {
+        if (bulleSource.typeEntite == ENTITE_VIF_DOR) {
+            faire_apparaitre_chapeau(etatJeu, configuration, &bulleSource);
         }
-        supprimer_bulle(etat, index);
+        supprimer_bulle(etatJeu, index);
         return;
     }
 
-    tailleBulleEnfant = (TailleBulle) (source.taille + INDEX_SUIVANT);
+    tailleBulleEnfant = (TailleBulle) (bulleSource.tailleBulle + INDEX_SUIVANT);
     largeurBulleEnfant = configuration->largeurBulles[(int) tailleBulleEnfant];
     hauteurBulleEnfant = configuration->hauteurBulles[(int) tailleBulleEnfant];
-    centreBulleX = source.x + source.largeur / (float) DIVISEUR_CENTRE;
-    centreBulleY = source.y + source.hauteur / (float) DIVISEUR_CENTRE;
+    centreBulleX = bulleSource.positionBulleX + bulleSource.largeur / (float) DIVISEUR_CENTRE;
+    centreBulleY = bulleSource.positionBulleY + bulleSource.hauteur / (float) DIVISEUR_CENTRE;
     vitesseHorizontaleBulleEnfant = calculer_vitesse_horizontale_bulle_enfant(configuration, tailleBulleEnfant);
 
-    supprimer_bulle(etat, index);
-    ajouter_bulle(etat,
+    supprimer_bulle(etatJeu, index);
+    ajouter_bulle(etatJeu,
                   configuration,
-                  source.type,
+                  bulleSource.typeEntite,
                   centreBulleX - largeurBulleEnfant / (float) DIVISEUR_CENTRE - largeurBulleEnfant * DECALAGE_SEPARATION_BULLE,
                   centreBulleY - hauteurBulleEnfant / (float) DIVISEUR_CENTRE,
                   -vitesseHorizontaleBulleEnfant,
                   ZERO_FLOTTANT,
                   tailleBulleEnfant);
-    indexNouvelleBulleGauche = etat->nbBulles - INDEX_SUIVANT;
+    indexNouvelleBulleGauche = etatJeu->nombreBulles - INDEX_SUIVANT;
 
-    ajouter_bulle(etat,
+    ajouter_bulle(etatJeu,
                   configuration,
-                  source.type,
+                  bulleSource.typeEntite,
                   centreBulleX - largeurBulleEnfant / (float) DIVISEUR_CENTRE + largeurBulleEnfant * DECALAGE_SEPARATION_BULLE,
                   centreBulleY - hauteurBulleEnfant / (float) DIVISEUR_CENTRE,
                   vitesseHorizontaleBulleEnfant,
                   ZERO_FLOTTANT,
                   tailleBulleEnfant);
-    indexNouvelleBulleDroite = etat->nbBulles - INDEX_SUIVANT;
+    indexNouvelleBulleDroite = etatJeu->nombreBulles - INDEX_SUIVANT;
 
-    if (source.type == ENTITE_VOL_DE_MORT) {
-        etat->bulles[indexNouvelleBulleGauche].nombreCoupsAvantDivision = VALEUR_NULLE;
-        etat->bulles[indexNouvelleBulleDroite].nombreCoupsAvantDivision = VALEUR_NULLE;
+    if (bulleSource.typeEntite == ENTITE_VOL_DE_MORT) {
+        etatJeu->bullesEnJeu[indexNouvelleBulleGauche].nombreCoupsAvantDivision = VALEUR_NULLE;
+        etatJeu->bullesEnJeu[indexNouvelleBulleDroite].nombreCoupsAvantDivision = VALEUR_NULLE;
     }
 }
 
-static void faire_lacher_bulle_mange_mort_moyenne(EtatJeu *etat,
+static void faire_lacher_bulle_mange_mort_moyenne(EtatJeu *etatJeu,
                                                   const ConfigurationJeu *configuration,
-                                                  const Bulle *source) {
+                                                  const Bulle *bulleSource) {
     float centreBulleX;
     float vitesseHorizontale;
 
-    if (!etat || !configuration || !source) {
+    if (!etatJeu || !configuration || !bulleSource) {
         return;
     }
 
-    centreBulleX = source->x + source->largeur / (float) DIVISEUR_CENTRE;
-    vitesseHorizontale = source->vx >= ZERO_FLOTTANT
+    centreBulleX = bulleSource->positionBulleX + bulleSource->largeur / (float) DIVISEUR_CENTRE;
+    vitesseHorizontale = bulleSource->vitesseBulleX >= ZERO_FLOTTANT
                          ? -vitesse_horizontale_relative(configuration, DIVISEUR_VITESSE_LACHER_BULLE)
                          : vitesse_horizontale_relative(configuration, DIVISEUR_VITESSE_LACHER_BULLE);
 
-    ajouter_bulle(etat,
+    ajouter_bulle(etatJeu,
                   configuration,
                   ENTITE_MANGE_MORT,
                   centreBulleX - configuration->largeurBulles[BULLE_MOYENNE] / (float) DIVISEUR_CENTRE,
-                  source->y + source->hauteur / (float) DIVISEUR_TIERS,
+                  bulleSource->positionBulleY + bulleSource->hauteur / (float) DIVISEUR_TIERS,
                   vitesseHorizontale,
                   -vitesse_verticale_relative(configuration, DIVISEUR_VITESSE_LACHER_BULLE_Y),
                   BULLE_MOYENNE);
 }
 
-static void mettre_a_jour_bulle(Bulle *bulle, const EtatJeu *etat, const ConfigurationJeu *configuration) {
+static void mettre_a_jour_bulle(Bulle *bulle, const EtatJeu *etatJeu, const ConfigurationJeu *configuration) {
     float vitesseHorizontaleMin;
 
-    if (!bulle || !etat || !configuration) {
+    if (!bulle || !etatJeu || !configuration) {
         return;
     }
 
     vitesseHorizontaleMin = vitesse_horizontale_relative(configuration, DIVISEUR_VITESSE_MIN_BULLE);
-    bulle->vy += bulle->gravite;
-    bulle->x += bulle->vx;
-    bulle->y += bulle->vy;
+    bulle->vitesseBulleY += bulle->gravite;
+    bulle->positionBulleX += bulle->vitesseBulleX;
+    bulle->positionBulleY += bulle->vitesseBulleY;
 
-    if (bulle->y + bulle->hauteur >= etat->groundY) {
-        bulle->y = (float) (etat->groundY - bulle->hauteur);
-        bulle->vy = bulle->rebondSol;
-        bulle->vx *= bulle->attenuationX;
+    if (bulle->positionBulleY + bulle->hauteur >= etatJeu->positionSolY) {
+        bulle->positionBulleY = (float) (etatJeu->positionSolY - bulle->hauteur);
+        bulle->vitesseBulleY = bulle->rebondSol;
+        bulle->vitesseBulleX *= bulle->attenuationX;
 
-        if (bulle->vx > ZERO_FLOTTANT && bulle->vx < vitesseHorizontaleMin) {
-            bulle->vx = vitesseHorizontaleMin;
+        if (bulle->vitesseBulleX > ZERO_FLOTTANT && bulle->vitesseBulleX < vitesseHorizontaleMin) {
+            bulle->vitesseBulleX = vitesseHorizontaleMin;
         }
-        if (bulle->vx < ZERO_FLOTTANT && bulle->vx > -vitesseHorizontaleMin) {
-            bulle->vx = -vitesseHorizontaleMin;
+        if (bulle->vitesseBulleX < ZERO_FLOTTANT && bulle->vitesseBulleX > -vitesseHorizontaleMin) {
+            bulle->vitesseBulleX = -vitesseHorizontaleMin;
         }
     }
 
-    if (bulle->x < etat->leftLimit) {
-        bulle->x = (float) etat->leftLimit;
-        bulle->vx = -bulle->vx;
+    if (bulle->positionBulleX < etatJeu->limiteGaucheTerrain) {
+        bulle->positionBulleX = (float) etatJeu->limiteGaucheTerrain;
+        bulle->vitesseBulleX = -bulle->vitesseBulleX;
     }
-    if (bulle->x + bulle->largeur > etat->rightLimit) {
-        bulle->x = (float) (etat->rightLimit - bulle->largeur);
-        bulle->vx = -bulle->vx;
+    if (bulle->positionBulleX + bulle->largeur > etatJeu->limiteDroiteTerrain) {
+        bulle->positionBulleX = (float) (etatJeu->limiteDroiteTerrain - bulle->largeur);
+        bulle->vitesseBulleX = -bulle->vitesseBulleX;
     }
 }
 
-static void mettre_a_jour_toutes_les_bulles(EtatJeu *etat, const ConfigurationJeu *configuration) {
-    int i;
+static void mettre_a_jour_toutes_les_bulles(EtatJeu *etatJeu, const ConfigurationJeu *configuration) {
+    int indexBulle;
 
-    for (i = INDEX_PREMIER; i < etat->nbBulles; i++) {
-        mettre_a_jour_bulle(&etat->bulles[i], etat, configuration);
+    for (indexBulle = INDEX_PREMIER; indexBulle < etatJeu->nombreBulles; indexBulle++) {
+        mettre_a_jour_bulle(&etatJeu->bullesEnJeu[indexBulle], etatJeu, configuration);
     }
 }
 
-static int trouver_bulle_touchee_par_projectile(const EtatJeu *etat) {
-    int i;
+static int trouver_bulle_touchee_par_projectile(const EtatJeu *etatJeu) {
+    int indexBulle;
 
-    for (i = INDEX_PREMIER; i < etat->nbBulles; i++) {
-        if (rectangles_en_collision((float) etat->projectileX,
-                                    (float) etat->projectileY,
-                                    etat->projectileW,
-                                    etat->projectileH,
-                                    etat->bulles[i].x,
-                                    etat->bulles[i].y,
-                                    etat->bulles[i].largeur,
-                                    etat->bulles[i].hauteur)) {
-            return i;
+    for (indexBulle = INDEX_PREMIER; indexBulle < etatJeu->nombreBulles; indexBulle++) {
+        if (rectangles_en_collision((float) etatJeu->positionProjectileX,
+                                    (float) etatJeu->positionProjectileY,
+                                    etatJeu->largeurProjectile,
+                                    etatJeu->hauteurProjectile,
+                                    etatJeu->bullesEnJeu[indexBulle].positionBulleX,
+                                    etatJeu->bullesEnJeu[indexBulle].positionBulleY,
+                                    etatJeu->bullesEnJeu[indexBulle].largeur,
+                                    etatJeu->bullesEnJeu[indexBulle].hauteur)) {
+            return indexBulle;
         }
     }
 
     return INDEX_INVALIDE;
 }
 
-static int aura_ardente_touche_bulle(const EtatJeu *etat,
+static int aura_ardente_touche_bulle(const EtatJeu *etatJeu,
                                      const ConfigurationJeu *configuration,
                                      const Bulle *bulle) {
     int margeAuraX;
     int margeAuraY;
 
-    if (!etat || !configuration || !bulle) {
+    if (!etatJeu || !configuration || !bulle) {
         return FAUX;
     }
 
@@ -406,54 +391,54 @@ static int aura_ardente_touche_bulle(const EtatJeu *etat,
         margeAuraY = dimension_relative(configuration->hauteurFenetre, DIVISEUR_AURA_MARGE);
     }
 
-    return rectangles_en_collision((float) (etat->x - margeAuraX),
-                                   (float) (etat->y - margeAuraY),
+    return rectangles_en_collision((float) (etatJeu->positionJoueurX - margeAuraX),
+                                   (float) (etatJeu->positionJoueurY - margeAuraY),
                                    configuration->joueurLargeur + margeAuraX * FACTEUR_CAPACITE_BULLES,
                                    configuration->joueurHauteur + margeAuraY * FACTEUR_CAPACITE_BULLES,
-                                   bulle->x,
-                                   bulle->y,
+                                   bulle->positionBulleX,
+                                   bulle->positionBulleY,
                                    bulle->largeur,
                                    bulle->hauteur);
 }
 
-static void gerer_coup_recu_par_bulle(EtatJeu *etat,
+static void gerer_coup_recu_par_bulle(EtatJeu *etatJeu,
                                       const ConfigurationJeu *configuration,
                                       int indexBulleTouchee) {
     Bulle bulleTouchee;
 
-    if (!etat || !configuration || indexBulleTouchee < VALEUR_NULLE || indexBulleTouchee >= etat->nbBulles) {
+    if (!etatJeu || !configuration || indexBulleTouchee < VALEUR_NULLE || indexBulleTouchee >= etatJeu->nombreBulles) {
         return;
     }
 
-    bulleTouchee = etat->bulles[indexBulleTouchee];
-    declencher_explosion(etat, &bulleTouchee);
+    bulleTouchee = etatJeu->bullesEnJeu[indexBulleTouchee];
+    declencher_explosion(etatJeu, &bulleTouchee);
 
-    if (bulleTouchee.type == ENTITE_VOL_DE_MORT && bulleTouchee.nombreCoupsAvantDivision > VALEUR_NULLE) {
-        etat->bulles[indexBulleTouchee].nombreCoupsAvantDivision--;
-        etat->score += POINTS_BOSS_TOUCHE;
-        faire_lacher_bulle_mange_mort_moyenne(etat, configuration, &bulleTouchee);
-        if (etat->bulles[indexBulleTouchee].nombreCoupsAvantDivision > VALEUR_NULLE) {
+    if (bulleTouchee.typeEntite == ENTITE_VOL_DE_MORT && bulleTouchee.nombreCoupsAvantDivision > VALEUR_NULLE) {
+        etatJeu->bullesEnJeu[indexBulleTouchee].nombreCoupsAvantDivision--;
+        etatJeu->scoreJoueur += POINTS_BOSS_TOUCHE;
+        faire_lacher_bulle_mange_mort_moyenne(etatJeu, configuration, &bulleTouchee);
+        if (etatJeu->bullesEnJeu[indexBulleTouchee].nombreCoupsAvantDivision > VALEUR_NULLE) {
             return;
         }
-        bulleTouchee = etat->bulles[indexBulleTouchee];
+        bulleTouchee = etatJeu->bullesEnJeu[indexBulleTouchee];
     }
 
-    etat->score += calculer_score_bulle(&bulleTouchee);
-    separer_bulle(etat, configuration, indexBulleTouchee);
+    etatJeu->scoreJoueur += calculer_score_bulle(&bulleTouchee);
+    separer_bulle(etatJeu, configuration, indexBulleTouchee);
 }
 
-static int joueur_touche(const EtatJeu *etat, const ConfigurationJeu *configuration) {
-    int i;
+static int joueur_touche(const EtatJeu *etatJeu, const ConfigurationJeu *configuration) {
+    int indexBulle;
 
-    for (i = INDEX_PREMIER; i < etat->nbBulles; i++) {
-        if (rectangles_en_collision((float) etat->x,
-                                    (float) etat->y,
+    for (indexBulle = INDEX_PREMIER; indexBulle < etatJeu->nombreBulles; indexBulle++) {
+        if (rectangles_en_collision((float) etatJeu->positionJoueurX,
+                                    (float) etatJeu->positionJoueurY,
                                     configuration->joueurLargeur,
                                     configuration->joueurHauteur,
-                                    etat->bulles[i].x,
-                                    etat->bulles[i].y,
-                                    etat->bulles[i].largeur,
-                                    etat->bulles[i].hauteur)) {
+                                    etatJeu->bullesEnJeu[indexBulle].positionBulleX,
+                                    etatJeu->bullesEnJeu[indexBulle].positionBulleY,
+                                    etatJeu->bullesEnJeu[indexBulle].largeur,
+                                    etatJeu->bullesEnJeu[indexBulle].hauteur)) {
             return VRAI;
         }
     }
@@ -461,60 +446,60 @@ static int joueur_touche(const EtatJeu *etat, const ConfigurationJeu *configurat
     return FAUX;
 }
 
-static int joueur_touche_chapeau(const EtatJeu *etat, const ConfigurationJeu *configuration) {
-    if (!etat || !configuration || !etat->chapeauVisible) {
+static int joueur_touche_chapeau(const EtatJeu *etatJeu, const ConfigurationJeu *configuration) {
+    if (!etatJeu || !configuration || !etatJeu->chapeauEstVisible) {
         return FAUX;
     }
 
-    return rectangles_en_collision((float) etat->x,
-                                   (float) etat->y,
+    return rectangles_en_collision((float) etatJeu->positionJoueurX,
+                                   (float) etatJeu->positionJoueurY,
                                    configuration->joueurLargeur,
                                    configuration->joueurHauteur,
-                                   (float) etat->chapeauX,
-                                   (float) etat->chapeauY,
-                                   etat->chapeauW,
-                                   etat->chapeauH);
+                                   (float) etatJeu->positionChapeauX,
+                                   (float) etatJeu->positionChapeauY,
+                                   etatJeu->largeurChapeau,
+                                   etatJeu->hauteurChapeau);
 }
 
-static void mettre_a_jour_chapeau(EtatJeu *etat, const ConfigurationJeu *configuration) {
-    if (!etat || !configuration || !etat->chapeauVisible) {
+static void mettre_a_jour_chapeau(EtatJeu *etatJeu, const ConfigurationJeu *configuration) {
+    if (!etatJeu || !configuration || !etatJeu->chapeauEstVisible) {
         return;
     }
 
-    etat->chapeauVy += vitesse_verticale_relative(configuration, DIVISEUR_GRAVITE_CHAPEAU);
-    etat->chapeauX += (int) etat->chapeauVx;
-    etat->chapeauY += (int) etat->chapeauVy;
+    etatJeu->vitesseChapeauY += vitesse_verticale_relative(configuration, DIVISEUR_GRAVITE_CHAPEAU);
+    etatJeu->positionChapeauX += (int) etatJeu->vitesseChapeauX;
+    etatJeu->positionChapeauY += (int) etatJeu->vitesseChapeauY;
 
-    if (etat->chapeauY + etat->chapeauH >= etat->groundY) {
-        etat->chapeauY = etat->groundY - etat->chapeauH;
-        etat->chapeauVy = -vitesse_verticale_relative(configuration, DIVISEUR_VITESSE_CHAPEAU_REBOND);
+    if (etatJeu->positionChapeauY + etatJeu->hauteurChapeau >= etatJeu->positionSolY) {
+        etatJeu->positionChapeauY = etatJeu->positionSolY - etatJeu->hauteurChapeau;
+        etatJeu->vitesseChapeauY = -vitesse_verticale_relative(configuration, DIVISEUR_VITESSE_CHAPEAU_REBOND);
     }
 
-    if (etat->chapeauX < etat->leftLimit) {
-        etat->chapeauX = etat->leftLimit;
-        etat->chapeauVx = -etat->chapeauVx;
+    if (etatJeu->positionChapeauX < etatJeu->limiteGaucheTerrain) {
+        etatJeu->positionChapeauX = etatJeu->limiteGaucheTerrain;
+        etatJeu->vitesseChapeauX = -etatJeu->vitesseChapeauX;
     }
-    if (etat->chapeauX + etat->chapeauW > etat->rightLimit) {
-        etat->chapeauX = etat->rightLimit - etat->chapeauW;
-        etat->chapeauVx = -etat->chapeauVx;
+    if (etatJeu->positionChapeauX + etatJeu->largeurChapeau > etatJeu->limiteDroiteTerrain) {
+        etatJeu->positionChapeauX = etatJeu->limiteDroiteTerrain - etatJeu->largeurChapeau;
+        etatJeu->vitesseChapeauX = -etatJeu->vitesseChapeauX;
     }
 }
 
-static void vider_bulles(EtatJeu *etat) {
-    if (!etat) {
+static void vider_bulles(EtatJeu *etatJeu) {
+    if (!etatJeu) {
         return;
     }
 
-    etat->nbBulles = VALEUR_NULLE;
+    etatJeu->nombreBulles = VALEUR_NULLE;
 }
 
-static int charger_niveau(EtatJeu *etat, const ConfigurationJeu *configuration, int niveau) {
+static int charger_niveau(EtatJeu *etatJeu, const ConfigurationJeu *configuration, int niveauActuel) {
     float largeur = (float) configuration->largeurFenetre;
     float hauteur = (float) configuration->hauteurFenetre;
 
-    switch (niveau) {
+    switch (niveauActuel) {
         case PREMIER_NIVEAU_JEU:
-            return ajouter_bulle(etat,
+            return ajouter_bulle(etatJeu,
                                  configuration,
                                  ENTITE_MANGE_MORT,
                                  largeur * POSITION_X_NIVEAU_1,
@@ -523,7 +508,7 @@ static int charger_niveau(EtatJeu *etat, const ConfigurationJeu *configuration, 
                                  ZERO_FLOTTANT,
                                  BULLE_GRANDE);
         case VALEUR_DOUBLE:
-            return ajouter_bulle(etat,
+            return ajouter_bulle(etatJeu,
                                  configuration,
                                  ENTITE_MANGE_MORT,
                                  largeur * POSITION_X_NIVEAU_2,
@@ -532,7 +517,7 @@ static int charger_niveau(EtatJeu *etat, const ConfigurationJeu *configuration, 
                                  ZERO_FLOTTANT,
                                  BULLE_TRES_GRANDE);
         case VALEUR_TRIPLE:
-            return ajouter_bulle(etat,
+            return ajouter_bulle(etatJeu,
                                  configuration,
                                  ENTITE_MANGE_MORT,
                                  largeur * POSITION_X_NIVEAU_3_GAUCHE,
@@ -540,7 +525,7 @@ static int charger_niveau(EtatJeu *etat, const ConfigurationJeu *configuration, 
                                  vitesse_horizontale_relative(configuration, DIVISEUR_VITESSE_NIVEAU_3_GAUCHE),
                                  ZERO_FLOTTANT,
                                  BULLE_GRANDE) &&
-                   ajouter_bulle(etat,
+                   ajouter_bulle(etatJeu,
                                  configuration,
                                  ENTITE_MANGE_MORT,
                                  largeur * POSITION_X_NIVEAU_3_DROITE,
@@ -548,7 +533,7 @@ static int charger_niveau(EtatJeu *etat, const ConfigurationJeu *configuration, 
                                  -vitesse_horizontale_relative(configuration, DIVISEUR_VITESSE_NIVEAU_3_DROITE),
                                  ZERO_FLOTTANT,
                                  BULLE_TRES_GRANDE) &&
-                   ajouter_bulle(etat,
+                   ajouter_bulle(etatJeu,
                                  configuration,
                                  ENTITE_VIF_DOR,
                                  largeur * POSITION_X_NIVEAU_3_VIF_DOR,
@@ -557,7 +542,7 @@ static int charger_niveau(EtatJeu *etat, const ConfigurationJeu *configuration, 
                                  ZERO_FLOTTANT,
                                  BULLE_MOYENNE);
         case VALEUR_QUADRUPLE:
-            return ajouter_bulle(etat,
+            return ajouter_bulle(etatJeu,
                                  configuration,
                                  ENTITE_MANGE_MORT,
                                  largeur * POSITION_X_NIVEAU_4_GAUCHE,
@@ -565,7 +550,7 @@ static int charger_niveau(EtatJeu *etat, const ConfigurationJeu *configuration, 
                                  vitesse_horizontale_relative(configuration, DIVISEUR_VITESSE_NIVEAU_4_GAUCHE),
                                  ZERO_FLOTTANT,
                                  BULLE_TRES_GRANDE) &&
-                   ajouter_bulle(etat,
+                   ajouter_bulle(etatJeu,
                                  configuration,
                                  ENTITE_MANGE_MORT,
                                  largeur * POSITION_X_NIVEAU_4_CENTRE,
@@ -573,7 +558,7 @@ static int charger_niveau(EtatJeu *etat, const ConfigurationJeu *configuration, 
                                  -vitesse_horizontale_relative(configuration, DIVISEUR_VITESSE_NIVEAU_4_CENTRE),
                                  ZERO_FLOTTANT,
                                  BULLE_GRANDE) &&
-                   ajouter_bulle(etat,
+                   ajouter_bulle(etatJeu,
                                  configuration,
                                  ENTITE_MANGE_MORT,
                                  largeur * POSITION_X_NIVEAU_4_DROITE,
@@ -581,7 +566,7 @@ static int charger_niveau(EtatJeu *etat, const ConfigurationJeu *configuration, 
                                  -vitesse_horizontale_relative(configuration, DIVISEUR_VITESSE_NIVEAU_4_DROITE),
                                  ZERO_FLOTTANT,
                                  BULLE_TRES_GRANDE) &&
-                   ajouter_bulle(etat,
+                   ajouter_bulle(etatJeu,
                                  configuration,
                                  ENTITE_VIF_DOR,
                                  largeur * POSITION_X_NIVEAU_4_VIF_DOR,
@@ -590,7 +575,7 @@ static int charger_niveau(EtatJeu *etat, const ConfigurationJeu *configuration, 
                                  ZERO_FLOTTANT,
                                  BULLE_MOYENNE);
         case VALEUR_QUINTUPLE:
-            if (!ajouter_bulle(etat,
+            if (!ajouter_bulle(etatJeu,
                                configuration,
                                ENTITE_VOL_DE_MORT,
                                largeur * POSITION_X_NIVEAU_5_BOSS - configuration->largeurBulles[BULLE_TRES_GRANDE] / (float) DIVISEUR_CENTRE,
@@ -601,86 +586,86 @@ static int charger_niveau(EtatJeu *etat, const ConfigurationJeu *configuration, 
                 return FAUX;
             }
 
-            configurer_vol_de_mort(&etat->bulles[etat->nbBulles - INDEX_SUIVANT]);
+            configurer_vol_de_mort(&etatJeu->bullesEnJeu[etatJeu->nombreBulles - INDEX_SUIVANT]);
             return VRAI;
         default:
             return FAUX;
     }
 }
 
-int initialiser_logique_jeu(EtatJeu *etat, const ConfigurationJeu *configuration) {
-    if (!etat || !configuration) {
+int initialiser_logique_jeu(EtatJeu *etatJeu, const ConfigurationJeu *configuration) {
+    if (!etatJeu || !configuration) {
         return FAUX;
     }
 
-    memset(etat, VALEUR_NULLE, sizeof(*etat));
-    etat->bulles = NULL;
-    etat->capaciteBulles = VALEUR_NULLE;
-    etat->nbBulles = VALEUR_NULLE;
-    etat->niveau = PREMIER_NIVEAU_JEU;
-    etat->niveauMaximum = NIVEAU_MAXIMUM_JEU;
-    etat->score = VALEUR_NULLE;
-    etat->dureeRestanteAuraArdenteMs = VALEUR_NULLE;
-    etat->tempsRestantNiveauMs = DUREE_NIVEAU_SECONDES * VALEUR_MILLISECONDES_SECONDE;
+    memset(etatJeu, VALEUR_NULLE, sizeof(*etatJeu));
+    etatJeu->bullesEnJeu = NULL;
+    etatJeu->capaciteMaxBullesEnJeu = VALEUR_NULLE;
+    etatJeu->nombreBulles = VALEUR_NULLE;
+    etatJeu->niveauActuel = PREMIER_NIVEAU_JEU;
+    etatJeu->niveauMaximum = NIVEAU_MAXIMUM_JEU;
+    etatJeu->scoreJoueur = VALEUR_NULLE;
+    etatJeu->dureeRestanteAuraArdenteMs = VALEUR_NULLE;
+    etatJeu->tempsRestantNiveauMs = DUREE_NIVEAU_SECONDES * VALEUR_MILLISECONDES_SECONDE;
 
-    if (!assurer_capacite_bulles(etat, CAPACITE_BULLES_INITIALE)) {
+    if (!assurer_capacite_bulles(etatJeu, CAPACITE_BULLES_INITIALE)) {
         return FAUX;
     }
 
-    return reinitialiser_partie(etat, configuration, PREMIER_NIVEAU_JEU);
+    return reinitialiser_partie(etatJeu, configuration, PREMIER_NIVEAU_JEU);
 }
 
-int reinitialiser_partie(EtatJeu *etat, const ConfigurationJeu *configuration, int niveau) {
-    if (!etat || !configuration) {
+int reinitialiser_partie(EtatJeu *etatJeu, const ConfigurationJeu *configuration, int niveauActuel) {
+    if (!etatJeu || !configuration) {
         return FAUX;
     }
 
-    if (niveau < PREMIER_NIVEAU_JEU) {
-        niveau = PREMIER_NIVEAU_JEU;
+    if (niveauActuel < PREMIER_NIVEAU_JEU) {
+        niveauActuel = PREMIER_NIVEAU_JEU;
     }
-    if (niveau > etat->niveauMaximum) {
-        niveau = etat->niveauMaximum;
+    if (niveauActuel > etatJeu->niveauMaximum) {
+        niveauActuel = etatJeu->niveauMaximum;
     }
 
-    copier_configuration_dans_etat(etat, configuration);
-    vider_bulles(etat);
-    etat->niveau = niveau;
+    copier_configuration_dans_etat(etatJeu, configuration);
+    vider_bulles(etatJeu);
+    etatJeu->niveauActuel = niveauActuel;
 
-    etat->x = configuration->largeurFenetre / DIVISEUR_CENTRE - configuration->joueurLargeur / DIVISEUR_CENTRE;
-    etat->y = etat->groundY - configuration->joueurHauteur;
-    etat->projectileActive = FAUX;
-    etat->projectileX = VALEUR_NULLE;
-    etat->projectileY = VALEUR_NULLE;
-    etat->chapeauVisible = FAUX;
-    etat->chapeauX = VALEUR_NULLE;
-    etat->chapeauY = VALEUR_NULLE;
-    etat->chapeauVx = ZERO_FLOTTANT;
-    etat->chapeauVy = ZERO_FLOTTANT;
-    etat->explosionActive = FAUX;
-    etat->explosionX = VALEUR_NULLE;
-    etat->explosionY = VALEUR_NULLE;
-    etat->explosionTimer = VALEUR_NULLE;
-    etat->auraArdenteActive = FAUX;
-    etat->dureeRestanteAuraArdenteMs = VALEUR_NULLE;
-    etat->perdu = FAUX;
-    etat->gagne = FAUX;
-    etat->tempsRestantNiveauMs = DUREE_NIVEAU_SECONDES * VALEUR_MILLISECONDES_SECONDE;
+    etatJeu->positionJoueurX = configuration->largeurFenetre / DIVISEUR_CENTRE - configuration->joueurLargeur / DIVISEUR_CENTRE;
+    etatJeu->positionJoueurY = etatJeu->positionSolY - configuration->joueurHauteur;
+    etatJeu->projectileEstActif = FAUX;
+    etatJeu->positionProjectileX = VALEUR_NULLE;
+    etatJeu->positionProjectileY = VALEUR_NULLE;
+    etatJeu->chapeauEstVisible = FAUX;
+    etatJeu->positionChapeauX = VALEUR_NULLE;
+    etatJeu->positionChapeauY = VALEUR_NULLE;
+    etatJeu->vitesseChapeauX = ZERO_FLOTTANT;
+    etatJeu->vitesseChapeauY = ZERO_FLOTTANT;
+    etatJeu->explosionEstActive = FAUX;
+    etatJeu->positionExplosionX = VALEUR_NULLE;
+    etatJeu->positionExplosionY = VALEUR_NULLE;
+    etatJeu->dureeExplosionRestanteImages = VALEUR_NULLE;
+    etatJeu->auraArdenteEstActive = FAUX;
+    etatJeu->dureeRestanteAuraArdenteMs = VALEUR_NULLE;
+    etatJeu->partiePerdue = FAUX;
+    etatJeu->partieGagnee = FAUX;
+    etatJeu->tempsRestantNiveauMs = DUREE_NIVEAU_SECONDES * VALEUR_MILLISECONDES_SECONDE;
 
-    return charger_niveau(etat, configuration, niveau);
+    return charger_niveau(etatJeu, configuration, niveauActuel);
 }
 
-void definir_pseudo_joueur(EtatJeu *etat, const char *pseudo) {
-    if (!etat) {
+void definir_pseudo_joueur(EtatJeu *etatJeu, const char *pseudoJoueur) {
+    if (!etatJeu) {
         return;
     }
 
-    if (!pseudo) {
-        etat->pseudo[CHAINE_DEBUT] = CARACTERE_FIN_CHAINE;
+    if (!pseudoJoueur) {
+        etatJeu->pseudoJoueur[CHAINE_DEBUT] = CARACTERE_FIN_CHAINE;
         return;
     }
 
-    strncpy(etat->pseudo, pseudo, TAILLE_PSEUDO_MAX - INDEX_SUIVANT);
-    etat->pseudo[TAILLE_PSEUDO_MAX - INDEX_SUIVANT] = CARACTERE_FIN_CHAINE;
+    strncpy(etatJeu->pseudoJoueur, pseudoJoueur, TAILLE_PSEUDO_MAX - INDEX_SUIVANT);
+    etatJeu->pseudoJoueur[TAILLE_PSEUDO_MAX - INDEX_SUIVANT] = CARACTERE_FIN_CHAINE;
 }
 
 void initialiser_commandes_jeu(CommandesJeu *commandes) {
@@ -692,104 +677,104 @@ void initialiser_commandes_jeu(CommandesJeu *commandes) {
     commandes->tirer = FAUX;
 }
 
-void mettre_a_jour_logique_jeu(EtatJeu *etat,
+void mettre_a_jour_logique_jeu(EtatJeu *etatJeu,
                                const ConfigurationJeu *configuration,
                                const CommandesJeu *commandes) {
     int indexBulleTouchee;
     int indexBulle;
 
-    if (!etat || !configuration || !commandes || etat->perdu || etat->gagne) {
+    if (!etatJeu || !configuration || !commandes || etatJeu->partiePerdue || etatJeu->partieGagnee) {
         return;
     }
 
-    etat->tempsRestantNiveauMs -= DUREE_IMAGE_LOGIQUE_MS;
-    if (etat->tempsRestantNiveauMs <= VALEUR_NULLE) {
-        etat->tempsRestantNiveauMs = VALEUR_NULLE;
-        etat->perdu = VRAI;
+    etatJeu->tempsRestantNiveauMs -= DUREE_IMAGE_LOGIQUE_MS;
+    if (etatJeu->tempsRestantNiveauMs <= VALEUR_NULLE) {
+        etatJeu->tempsRestantNiveauMs = VALEUR_NULLE;
+        etatJeu->partiePerdue = VRAI;
         return;
     }
 
-    etat->x += commandes->deplacementHorizontal * etat->speed;
-    if (etat->x < etat->leftLimit) {
-        etat->x = etat->leftLimit;
+    etatJeu->positionJoueurX += commandes->deplacementHorizontal * etatJeu->vitesseJoueur;
+    if (etatJeu->positionJoueurX < etatJeu->limiteGaucheTerrain) {
+        etatJeu->positionJoueurX = etatJeu->limiteGaucheTerrain;
     }
-    if (etat->x + configuration->joueurLargeur > etat->rightLimit) {
-        etat->x = etat->rightLimit - configuration->joueurLargeur;
+    if (etatJeu->positionJoueurX + configuration->joueurLargeur > etatJeu->limiteDroiteTerrain) {
+        etatJeu->positionJoueurX = etatJeu->limiteDroiteTerrain - configuration->joueurLargeur;
     }
-    etat->y = etat->groundY - configuration->joueurHauteur;
+    etatJeu->positionJoueurY = etatJeu->positionSolY - configuration->joueurHauteur;
 
-    if (commandes->tirer && !etat->projectileActive) {
-        etat->projectileActive = VRAI;
-        etat->projectileX = etat->x + configuration->joueurLargeur / DIVISEUR_CENTRE - etat->projectileW / DIVISEUR_CENTRE;
-        etat->projectileY = etat->y;
+    if (commandes->tirer && !etatJeu->projectileEstActif) {
+        etatJeu->projectileEstActif = VRAI;
+        etatJeu->positionProjectileX = etatJeu->positionJoueurX + configuration->joueurLargeur / DIVISEUR_CENTRE - etatJeu->largeurProjectile / DIVISEUR_CENTRE;
+        etatJeu->positionProjectileY = etatJeu->positionJoueurY;
     }
 
-    if (etat->projectileActive) {
-        etat->projectileY -= etat->projectileSpeed;
-        if (etat->projectileY + etat->projectileH < VALEUR_NULLE) {
-            etat->projectileActive = FAUX;
+    if (etatJeu->projectileEstActif) {
+        etatJeu->positionProjectileY -= etatJeu->vitesseProjectile;
+        if (etatJeu->positionProjectileY + etatJeu->hauteurProjectile < VALEUR_NULLE) {
+            etatJeu->projectileEstActif = FAUX;
         }
     }
 
-    mettre_a_jour_toutes_les_bulles(etat, configuration);
-    mettre_a_jour_chapeau(etat, configuration);
+    mettre_a_jour_toutes_les_bulles(etatJeu, configuration);
+    mettre_a_jour_chapeau(etatJeu, configuration);
 
-    if (etat->projectileActive) {
-        indexBulleTouchee = trouver_bulle_touchee_par_projectile(etat);
+    if (etatJeu->projectileEstActif) {
+        indexBulleTouchee = trouver_bulle_touchee_par_projectile(etatJeu);
         if (indexBulleTouchee != INDEX_INVALIDE) {
-            etat->projectileActive = FAUX;
-            gerer_coup_recu_par_bulle(etat, configuration, indexBulleTouchee);
+            etatJeu->projectileEstActif = FAUX;
+            gerer_coup_recu_par_bulle(etatJeu, configuration, indexBulleTouchee);
         }
     }
 
-    if (etat->explosionActive) {
-        etat->explosionTimer--;
-        if (etat->explosionTimer <= VALEUR_NULLE) {
-            etat->explosionActive = FAUX;
+    if (etatJeu->explosionEstActive) {
+        etatJeu->dureeExplosionRestanteImages--;
+        if (etatJeu->dureeExplosionRestanteImages <= VALEUR_NULLE) {
+            etatJeu->explosionEstActive = FAUX;
         }
     }
 
-    if (joueur_touche_chapeau(etat, configuration)) {
-        etat->chapeauVisible = FAUX;
-        etat->chapeauVx = ZERO_FLOTTANT;
-        etat->chapeauVy = ZERO_FLOTTANT;
-        etat->auraArdenteActive = VRAI;
-        etat->dureeRestanteAuraArdenteMs = DUREE_AURA_ARDENTE_MS;
-        etat->score += POINTS_BONUS_CHAPEAU;
+    if (joueur_touche_chapeau(etatJeu, configuration)) {
+        etatJeu->chapeauEstVisible = FAUX;
+        etatJeu->vitesseChapeauX = ZERO_FLOTTANT;
+        etatJeu->vitesseChapeauY = ZERO_FLOTTANT;
+        etatJeu->auraArdenteEstActive = VRAI;
+        etatJeu->dureeRestanteAuraArdenteMs = DUREE_AURA_ARDENTE_MS;
+        etatJeu->scoreJoueur += POINTS_BONUS_CHAPEAU;
     }
 
-    if (etat->auraArdenteActive) {
+    if (etatJeu->auraArdenteEstActive) {
         /* L'aura détruit toute bulle qui s'approche trop près du joueur. */
-        for (indexBulle = etat->nbBulles - INDEX_SUIVANT; indexBulle >= INDEX_PREMIER; indexBulle--) {
-            if (aura_ardente_touche_bulle(etat, configuration, &etat->bulles[indexBulle])) {
-                gerer_coup_recu_par_bulle(etat, configuration, indexBulle);
+        for (indexBulle = etatJeu->nombreBulles - INDEX_SUIVANT; indexBulle >= INDEX_PREMIER; indexBulle--) {
+            if (aura_ardente_touche_bulle(etatJeu, configuration, &etatJeu->bullesEnJeu[indexBulle])) {
+                gerer_coup_recu_par_bulle(etatJeu, configuration, indexBulle);
             }
         }
 
-        etat->dureeRestanteAuraArdenteMs -= DUREE_IMAGE_LOGIQUE_MS;
-        if (etat->dureeRestanteAuraArdenteMs <= VALEUR_NULLE) {
-            etat->dureeRestanteAuraArdenteMs = VALEUR_NULLE;
-            etat->auraArdenteActive = FAUX;
+        etatJeu->dureeRestanteAuraArdenteMs -= DUREE_IMAGE_LOGIQUE_MS;
+        if (etatJeu->dureeRestanteAuraArdenteMs <= VALEUR_NULLE) {
+            etatJeu->dureeRestanteAuraArdenteMs = VALEUR_NULLE;
+            etatJeu->auraArdenteEstActive = FAUX;
         }
     }
 
-    if (joueur_touche(etat, configuration)) {
-        etat->perdu = VRAI;
+    if (joueur_touche(etatJeu, configuration)) {
+        etatJeu->partiePerdue = VRAI;
     }
 
-    if (etat->nbBulles == VALEUR_NULLE) {
-        etat->gagne = VRAI;
+    if (etatJeu->nombreBulles == VALEUR_NULLE) {
+        etatJeu->partieGagnee = VRAI;
     }
 }
 
-void fermer_logique_jeu(EtatJeu *etat) {
-    if (!etat) {
+void fermer_logique_jeu(EtatJeu *etatJeu) {
+    if (!etatJeu) {
         return;
     }
 
-    free(etat->bulles);
-    etat->bulles = NULL;
-    etat->nbBulles = VALEUR_NULLE;
-    etat->capaciteBulles = VALEUR_NULLE;
-    etat->projectileActive = FAUX;
+    free(etatJeu->bullesEnJeu);
+    etatJeu->bullesEnJeu = NULL;
+    etatJeu->nombreBulles = VALEUR_NULLE;
+    etatJeu->capaciteMaxBullesEnJeu = VALEUR_NULLE;
+    etatJeu->projectileEstActif = FAUX;
 }
